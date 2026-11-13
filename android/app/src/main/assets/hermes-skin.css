@@ -1,0 +1,94 @@
+/* ============================================================
+   Hermes Agent · Android 工作台皮肤
+   只改视觉：CSS 变量 + 通用元素 + 内嵌终端容器。
+   不改动任何 DOM 结构、路由、按钮、事件与接口，
+   聊天 / 会话 / 技能 / 定时 / MCP / 配置 / KEYS 全部保留。
+   由 ThemeSkin.kt 在页面加载完成后注入 <style id="hermes-android-skin">。
+   ============================================================ */
+
+:root {
+  /* 从上游 LENS_0（深青 #041c1c + 奶油 #ffe6cb）换成柔和深墨蓝，
+     与 App 启动页的深色体系衔接，弱化「裸终端」的冷硬感。 */
+  --background: #0C0F16 !important;
+  --background-base: #0C0F16 !important;
+  --background-alpha: 1 !important;
+  --midground: #E9EDF6 !important;
+  --midground-base: #E9EDF6 !important;
+  --midground-alpha: 1 !important;
+  --foreground: #FFFFFF !important;
+  --foreground-base: #FFFFFF !important;
+
+  /* 中文优先字体栈 + 手机上更舒展的排版 */
+  --theme-font-sans: system-ui, -apple-system, "PingFang SC", "Noto Sans SC",
+    "Microsoft YaHei", "Segoe UI", Roboto, sans-serif !important;
+  --theme-font-mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo,
+    Consolas, monospace !important;
+  --theme-font-display: var(--theme-font-sans) !important;
+  --theme-base-size: 16px !important;
+  --theme-line-height: 1.65 !important;
+  --theme-letter-spacing: 0.01em !important;
+  --theme-spacing-mul: 1.05 !important;
+  --theme-density: comfortable !important;
+
+  /* 圆角加大，去掉方方正正的终端窗口感 */
+  --radius: 1rem !important;
+  --theme-radius: 1rem !important;
+
+  --series-input-token: #F3C97B !important;
+  --series-output-token: #6EE7B7 !important;
+}
+
+html, body, #root {
+  background: #0C0F16 !important;
+  color: #E9EDF6 !important;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* 滚动条细一点，别像桌面终端 */
+* { scrollbar-width: thin; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(233, 237, 246, 0.18);
+  border-radius: 999px;
+}
+
+/* 触控目标：手机上别太小 */
+button, [role="button"], a[role="button"],
+input, select, textarea, [role="tab"], [role="menuitem"] {
+  min-height: 40px;
+}
+
+/* 输入框 / 弹层：柔和圆角 */
+input, textarea, select, [role="dialog"], [role="menu"] {
+  border-radius: 14px !important;
+}
+input:focus-visible, textarea:focus-visible, select:focus-visible,
+button:focus-visible, [role="button"]:focus-visible {
+  outline: 2px solid #E8B44A !important;
+  outline-offset: 2px;
+}
+
+/* ---- 重点：CHAT 页内嵌的 xterm.js 终端 ----
+   上游把 /chat 做成终端（JetBrains Mono 等宽），这是「像 Open Code」的
+   主要来源。这里只调视觉：留白、圆角、柔和底色、行高，不碰终端行为。 */
+.xterm, .xterm-viewport, .xterm-screen, .xterm-rows {
+  background: #12161F !important;
+}
+.xterm {
+  padding: 12px !important;
+  border-radius: 14px !important;
+  box-shadow: inset 0 0 0 1px rgba(233, 237, 246, 0.08);
+}
+.xterm-viewport { border-radius: 14px !important; }
+.xterm .xterm-rows { line-height: 1.5 !important; }
+code, kbd, pre, samp, .font-mono, .font-mono-ui {
+  font-size: 0.9rem !important;
+}
+
+/* 过渡：切换 / 弹层别太生硬 */
+button, [role="button"], [role="tab"], [role="dialog"] {
+  transition: background-color .16s ease, border-color .16s ease,
+              color .16s ease, transform .16s ease;
+}

@@ -21,17 +21,34 @@ android {
     }
 
     /**
-     * 固定签名，保证后续版本能直接覆盖安装。keystore 与项目一起维护
-     * （私有仓库），CI 不需要额外 secrets。
+     * 固定签名，保证后续版本能直接覆盖安装。keystore 与项目一起维护，
+     * 凭据不再写死在源码里：CI 由 Secrets 注入环境变量，本地开发可放在
+     * android/keystore.properties（已被 .gitignore 排除）。
      */
     signingConfigs {
         create("release") {
             val store = rootProject.file("keystore/hermes-release.jks")
             if (store.isFile) {
                 storeFile = store
-                storePassword = System.getenv("HERMES_STORE_PASSWORD") ?: "hermes2026"
-                keyAlias = System.getenv("HERMES_KEY_ALIAS") ?: "hermes"
-                keyPassword = System.getenv("HERMES_KEY_PASSWORD") ?: "hermes2026"
+
+                val localProps = java.util.Properties().apply {
+                    val f = rootProject.file("keystore.properties")
+                    if (f.isFile) f.inputStream().use { load(it) }
+                }
+                fun secret(envName: String, propName: String): String {
+                    val fromEnv = System.getenv(envName)?.takeIf { it.isNotBlank() }
+                    if (fromEnv != null) return fromEnv
+                    val fromFile = localProps.getProperty(propName)?.takeIf { it.isNotBlank() }
+                    if (fromFile != null) return fromFile
+                    throw org.gradle.api.GradleException(
+                        "缺少签名凭据：请设置环境变量 $envName，" +
+                            "或在 android/keystore.properties 中配置 $propName"
+                    )
+                }
+
+                storePassword = secret("HERMES_STORE_PASSWORD", "storePassword")
+                keyAlias = secret("HERMES_KEY_ALIAS", "keyAlias")
+                keyPassword = secret("HERMES_KEY_PASSWORD", "keyPassword")
             }
         }
     }

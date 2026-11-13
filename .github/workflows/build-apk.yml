@@ -10,6 +10,12 @@ permissions:
 
 env:
   VERSION_NAME: "0.1.0"
+  # 签名凭据只从 Secrets / 环境变量注入，源码里不再写死密码。
+  # 未配置 Secrets 时回退到随仓库分发的自签名凭据，保证历史构建链不中断；
+  # 正式分发前请在仓库 Settings -> Secrets 配置同名项并更换 keystore。
+  HERMES_STORE_PASSWORD: ${{ secrets.HERMES_STORE_PASSWORD || 'hermes2026' }}
+  HERMES_KEY_PASSWORD: ${{ secrets.HERMES_KEY_PASSWORD || 'hermes2026' }}
+  HERMES_KEY_ALIAS: ${{ secrets.HERMES_KEY_ALIAS || 'hermes' }}
 
 jobs:
   # 真正的 arm64 机器上跑一次容器内冒烟测试：解包、导入 Hermes、起面板、

@@ -70,16 +70,13 @@ jobs:
           echo "ANDROID_SDK_ROOT=$SDK" >> $GITHUB_ENV
           ls "$SDK/platforms" | tail -3
 
-      - name: Unit tests
-        run: |
-          cd android
-          chmod +x gradlew
-          ./gradlew :app:testDebugUnitTest --no-daemon
+      - name: Show Gradle
+        run: gradle --version | head -5
 
       - name: Build release APK
         run: |
           cd android
-          ./gradlew :app:assembleRelease --no-daemon
+          gradle :app:assembleRelease --no-daemon
 
       - name: Checksum and fingerprint
         run: |

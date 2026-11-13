@@ -10,18 +10,19 @@ import android.view.ViewGroup
 import android.webkit.WebView
 
 /**
- * 工作台皮肤的接线层。
+ * 皮肤 / 桥接脚本的兜底注入层。
  *
- * 刻意不改动 MainActivity（877 行的两页 UI 与 WebView 配置），改用 Application
- * 生命周期回调在视图树里找到 WebView，页面加载完成后注入一层 CSS。零侵入、
- * 零回归风险：MainActivity 的逻辑、路由、事件、WebViewClient 全都不被触碰。
- * 皮肤只覆盖视觉 token，聊天 / 会话 / 技能 / 定时 / MCP / 配置 / KEYS 全部保留。
+ * 主注入点在 MainActivity 的 WebViewClient.onPageFinished，这里再用低频轮询
+ * 补一次：SPA 整页跳转、页面被系统回收后重建、或者首帧注入时机过早时，
+ * 都能自动恢复。install() 是幂等的（脚本带版本号、CSS 内容相同就不重写），
+ * 重复执行不会叠加监听器或触发样式重排。
+ *
+ * 零侵入：不触碰 MainActivity 的视图结构、路由、事件与 WebViewClient。
  */
 class HermesApp : Application() {
 
     private val handler = Handler(Looper.getMainLooper())
     private var resumed: Activity? = null
-    private var injectedUrl: String? = null
 
     private val pump = object : Runnable {
         override fun run() {
@@ -30,13 +31,10 @@ class HermesApp : Application() {
                 val webView = findWebView(activity.window.decorView)
                 val url = webView?.url
                 if (webView != null && url != null &&
-                    url.startsWith("http://127.0.0.1") && webView.progress >= 100
+                    (url.startsWith("http://127.0.0.1") || url.startsWith("http://localhost")) &&
+                    webView.progress >= 100
                 ) {
-                    // 同一个页面只注入一次；SPA 内部换路由不会移除 head 里的 style。
-                    if (url != injectedUrl) {
-                        ThemeSkin.apply(webView, this@HermesApp)
-                        injectedUrl = url
-                    }
+                    WebBridge.install(webView, this@HermesApp)
                 }
             }
             if (resumed != null) handler.postDelayed(this, POLL_MS)
@@ -79,6 +77,6 @@ class HermesApp : Application() {
     }
 
     private companion object {
-        const val POLL_MS = 1500L
+        const val POLL_MS = 2000L
     }
 }

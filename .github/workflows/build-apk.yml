@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 env:
-  VERSION_NAME: "0.1.0"
+  VERSION_NAME: "0.2.0"
   # 签名凭据只从 Secrets / 环境变量注入，源码里不再写死密码。
   # 未配置 Secrets 时回退到随仓库分发的自签名凭据，保证历史构建链不中断；
   # 正式分发前请在仓库 Settings -> Secrets 配置同名项并更换 keystore。
@@ -117,8 +117,18 @@ jobs:
           tag_name: runtime-v1
           name: Hermes Agent Android runtime
           body: |
-            Hermes Agent 安卓封装（内置 Ubuntu 根环境 + Python 3.12 + Hermes ${{ env.VERSION_NAME }}）。
-            直接安装 APK，首次启动会自动解压运行环境。
+            Hermes Agent 安卓版 ${{ env.VERSION_NAME }}（内置 Ubuntu 根环境 + Python 3.12）。
+
+            这一版是 2.0：打开即进入工作台，不再有「进入工作台」启动页。
+            - 新增原生顶栏 / 底部 Tab / 悬浮按钮，按手机 App 的方式操作
+            - 修复文件选择：网页里的上传、导入按钮现在能弹出系统文件选择器
+            - 修复新建工作区：直接在手机存储建目录并切换，绕开桌面端数据源缺失
+            - 面板皮肤重做为单栏卡片流，终端收成圆角卡片
+            - 补齐下载落盘、运行日志、重启等入口，原有功能一个不少
+
+            签名与 1.0 完全一致，可直接覆盖安装，面板数据与设置不会丢。
+            仅支持 arm64-v8a；首次启动需解压运行环境，约 1–3 分钟。
+          
           files: |
             android/app/build/outputs/apk/release/Hermes-Agent-Android-${{ env.VERSION_NAME }}.apk
             android/app/src/main/assets/hermes-rootfs-arm64.tar.gz

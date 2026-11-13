@@ -13,8 +13,10 @@ android {
         // 与 Kimi Code 那套一致：targetSdk 28 才允许从 App 私有目录执行二进制，
         // proot 需要这个能力。
         targetSdk = 28
-        versionCode = 1
-        versionName = "0.1.0"
+        // 覆盖安装三要素：applicationId 不变、签名证书不变、versionCode 只增不减。
+        // 2.0 相对 1.0 是升级，旧版数据（面板 localStorage / 工作目录 / 设置）全部保留。
+        versionCode = 2
+        versionName = "0.2.0"
         ndk {
             abiFilters += listOf("arm64-v8a")
         }

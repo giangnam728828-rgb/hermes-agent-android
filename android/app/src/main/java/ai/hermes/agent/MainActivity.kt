@@ -2,6 +2,7 @@ package ai.hermes.agent
 
 import android.Manifest
 import android.app.Activity
+import android.content.ClipData
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
@@ -10,9 +11,11 @@ import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.text.InputType
+import android.util.Base64
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.KeyEvent
@@ -20,6 +23,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.Window
 import android.view.WindowManager
+import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -28,7 +32,6 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.EditText
 import android.widget.FrameLayout
-import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -36,43 +39,77 @@ import android.widget.Toast
 import java.io.File
 
 /**
- * 两页结构：启动页（状态 + 日志 + 入口）和全屏工作台（Hermes 自带 Web 面板）。
- * 刻意不自动跳进工作台——用户先看到「是否真的起来了」，再自己点进去。
+ * 单页 App 壳：打开即是工作台，没有「进入工作台」这一步。
+ *
+ * 2.0 之前这里是「启动页 + 工作台」两页结构，注释里还写着「刻意不自动跳进
+ * 工作台」，用户明确要求去掉那一层。现在服务在后台自动拉起，启动过程只是一张
+ * 会自动淡出的覆盖卡片；页面加载完直接落在面板里。
+ *
+ * 新增的原生能力（都是 1.0 缺失、导致「点了没反应」的硬伤）：
+ *  - WebChromeClient.onShowFileChooser：网页里隐藏的 <input type=file> 终于能
+ *    弹出系统文件选择器，文件/配置/会话导入与上传可用；
+ *  - 下载监听：data: 与 http(s) 下载落到手机存储；
+ *  - 工作区管理：绕开 headless 环境缺失的桌面 projects.db，直接在手机存储
+ *    建目录并写进面板存储，新建/切换工作区可用；
+ *  - 顶部栏 + 底部 Tab + 悬浮按钮，用面板自己的 <a href> 切页，不重载、
+ *    不破坏 SPA 状态。
+ *
+ * 原有功能一个不少：端口/工作目录/局域网/全自主/保持唤醒/导出日志/重装/重启/
+ * 运行日志/返回键，全部仍可从顶栏与「更多」进入。
  */
 class MainActivity : Activity() {
 
-    private lateinit var container: FrameLayout
-    private lateinit var launcherPage: ScrollView
+    private data class Tab(val label: String, val icon: String, val path: String)
+
+    private lateinit var root: FrameLayout
     private lateinit var webHost: FrameLayout
     private lateinit var webView: WebView
-
+    private lateinit var bootOverlay: FrameLayout
+    private lateinit var bootTitle: TextView
+    private lateinit var bootDetail: TextView
+    private lateinit var bootTrack: View
+    private lateinit var bootFill: View
+    private lateinit var bootLogToggle: TextView
+    private lateinit var bootLogPanel: LinearLayout
+    private lateinit var bootLogText: TextView
     private lateinit var statusDot: View
-    private lateinit var statusTitle: TextView
-    private lateinit var statusDetail: TextView
-    private lateinit var portChip: TextView
-    private lateinit var primaryButton: TextView
-    private lateinit var secondaryRow: LinearLayout
-    private lateinit var logPanel: LinearLayout
-    private lateinit var logText: TextView
-    private lateinit var logToggle: TextView
-    private lateinit var progressTrack: View
-    private lateinit var progressFill: View
+    private lateinit var headerSub: TextView
+    private lateinit var tabRow: LinearLayout
 
-    private var workspaceVisible = false
+    private val tabs = mutableListOf<LinearLayout>()
+    private var activeTab = 0
+
+    private var bootVisible = true
+    private var pageLoaded = false
     private var logsExpanded = false
     private var lastLogVersion = -1
-    private var lastPhase: Runtime.Phase? = null
+    private var backPressedAt = 0L
+    private var tickCount = 0
+
+    private var filePathCallback: ValueCallback<Array<Uri>>? = null
+    private var importTarget: File? = null
 
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val runtimeListener: () -> Unit = { runOnUiThread { render() } }
     private val ticker = object : Runnable {
         override fun run() {
             render()
+            tickCount++
+            if (tickCount % 2 == 0 && !bootVisible) syncRouteTabs()
             mainHandler.postDelayed(this, 1200)
         }
     }
 
-    private val runtimeListener: () -> Unit = {
-        runOnUiThread { render() }
+    private companion object {
+        const val REQ_FILE_CHOOSER = 1001
+        const val REQ_IMPORT = 1002
+        val TABS = listOf(
+            Tab("会话", "☰", "/sessions"),
+            Tab("终端", "▸", "/chat"),
+            Tab("文件", "▤", "/files"),
+            Tab("技能", "✦", "/skills"),
+            Tab("设置", "⚙", ""),
+        )
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -83,261 +120,291 @@ class MainActivity : Activity() {
         buildUi()
         Runtime.addListener(runtimeListener)
         requestNotificationPermission()
+        applyImmersive()
         maybeStartRuntime()
         render()
+        if (Runtime.phase == Runtime.Phase.READY) loadWorkspace()
     }
 
     // ---------------------------------------------------------------- UI 构建
 
     private fun buildUi() {
-        container = FrameLayout(this)
-        container.background = bgGradient()
+        root = FrameLayout(this).apply { background = bgGradient() }
 
-        launcherPage = ScrollView(this).apply {
-            isFillViewport = true
-            overScrollMode = View.OVER_SCROLL_NEVER
-        }
-        val column = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(22), dp(38), dp(22), dp(28))
-        }
-        launcherPage.addView(column, ViewGroup.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+        val column = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        column.addView(buildTopBar(), LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(60),
         ))
-
-        column.addView(buildBrand())
-        column.addView(space(30))
-        column.addView(buildStatusCard())
-        column.addView(space(20))
-        column.addView(buildPrimaryButton())
-        column.addView(space(10))
-        column.addView(buildSecondaryRow())
-        column.addView(space(22))
-        column.addView(buildLogSection())
-        column.addView(space(18))
-        column.addView(buildFooter())
 
         webHost = FrameLayout(this).apply {
             setBackgroundColor(Color.parseColor("#F3F5FC"))
-            visibility = View.GONE
         }
         webView = WebView(this)
         configureWebView()
         webHost.addView(webView, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT,
         ))
+        webHost.addView(buildFab(), FrameLayout.LayoutParams(dp(56), dp(56)).apply {
+            gravity = Gravity.BOTTOM or Gravity.END
+            bottomMargin = dp(18)
+            rightMargin = dp(18)
+        })
 
-        container.addView(launcherPage, FrameLayout.LayoutParams(
+        column.addView(webHost, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f,
+        ))
+        column.addView(buildTabBar(), LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+        ))
+
+        root.addView(column, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT,
         ))
-        container.addView(webHost, FrameLayout.LayoutParams(
+        root.addView(buildBootOverlay(), FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT,
         ))
-        setContentView(container)
+        setContentView(root)
     }
 
-    private fun buildBrand(): View {
-        val wrap = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-
-        // DSH-Go 风格顶部栏：圆形按钮 + 胶囊标题 + 圆形按钮
-        val header = LinearLayout(this).apply {
+    /** 顶栏：圆形设置键 + 胶囊标题（带状态点/当前工作区）+ 圆形更多键。 */
+    private fun buildTopBar(): View {
+        val bar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(14), dp(8), dp(14), dp(8))
         }
-        header.addView(circleButton("☰") { showSettings() })
+        bar.addView(circleButton("☰") { showSettings() })
+
         val pill = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             background = rounded(C.SURFACE, 22)
-            setPadding(dp(18), dp(8), dp(18), dp(8))
+            setPadding(dp(16), dp(6), dp(16), dp(6))
             elevation = dp(3).toFloat()
         }
-        pill.addView(TextView(this).apply {
+        val titleRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        statusDot = View(this).apply { background = circle(C.MUTED, 7) }
+        titleRow.addView(statusDot, LinearLayout.LayoutParams(dp(7), dp(7)))
+        titleRow.addView(spaceH(7))
+        titleRow.addView(TextView(this).apply {
             text = "Hermes Agent"
             textSize = 14.5f
             setTextColor(C.TEXT)
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-            gravity = Gravity.CENTER
         })
-        pill.addView(TextView(this).apply {
-            text = "● 本机 · workspace"
+        pill.addView(titleRow)
+        headerSub = TextView(this).apply {
+            text = "本机 · 默认工作区"
             textSize = 10.5f
-            setTextColor(C.OK)
+            setTextColor(C.MUTED)
             gravity = Gravity.CENTER
-        })
-        header.addView(pill, LinearLayout.LayoutParams(
+            maxLines = 1
+        }
+        pill.addView(headerSub)
+        bar.addView(pill, LinearLayout.LayoutParams(
             0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f,
         ).apply { leftMargin = dp(12); rightMargin = dp(12) })
-        header.addView(circleButton("✎") { onPrimary() })
-        wrap.addView(header)
-
-        wrap.addView(space(28))
-        wrap.addView(TextView(this).apply {
-            text = "Hermes Agent"
-            textSize = 28f
-            letterSpacing = -0.02f
-            setTextColor(C.TEXT)
-            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-        })
-        wrap.addView(space(6))
-        wrap.addView(TextView(this).apply {
-            text = "会自己长出技能的智能体 · 手机上直接跑"
-            textSize = 13f
-            setTextColor(C.MUTED)
-        })
-        return wrap
+        bar.addView(circleButton("⋯") { showMore() })
+        return bar
     }
 
-    private fun buildStatusCard(): View {
+    /** 悬浮主按钮：新建/切换工作区 + 常用快捷操作。 */
+    private fun buildFab(): View = TextView(this).apply {
+        text = "+"
+        textSize = 27f
+        gravity = Gravity.CENTER
+        setTextColor(Color.WHITE)
+        typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
+        background = rounded(C.ACCENT, 28)
+        elevation = dp(8).toFloat()
+        isClickable = true
+        setOnClickListener { showWorkspaceSheet() }
+        EtaMotion.press(this@MainActivity, this)
+    }
+
+    /** 底部 Tab：点击走面板自己的 SPA 路由，不重载页面。 */
+    private fun buildTabBar(): View {
+        tabRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            background = rounded(C.SURFACE, 0)
+            setPadding(dp(6), dp(8), dp(6), dp(10))
+            elevation = dp(6).toFloat()
+        }
+        TABS.forEachIndexed { index, tab ->
+            val item = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                setPadding(dp(2), dp(4), dp(2), dp(2))
+                isClickable = true
+                setOnClickListener { onTabClicked(index) }
+                EtaMotion.press(this@MainActivity, this)
+            }
+            val icon = TextView(this).apply {
+                text = tab.icon
+                textSize = 19f
+                gravity = Gravity.CENTER
+                setTextColor(C.MUTED)
+            }
+            val label = TextView(this).apply {
+                text = tab.label
+                textSize = 10.5f
+                gravity = Gravity.CENTER
+                setTextColor(C.MUTED)
+            }
+            item.addView(icon)
+            item.addView(label)
+            item.tag = icon to label
+            tabs.add(item)
+            tabRow.addView(item, LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f,
+            ))
+        }
+        paintTabs()
+        return tabRow
+    }
+
+    private fun onTabClicked(index: Int) {
+        val tab = TABS[index]
+        if (tab.path.isEmpty()) {
+            showSettings()
+            return
+        }
+        setActiveTab(index)
+        if (Runtime.phase == Runtime.Phase.READY) {
+            WebBridge.navigate(webView, tab.path)
+        } else {
+            toast("服务还在启动，稍等一下")
+        }
+    }
+
+    private fun setActiveTab(index: Int) {
+        activeTab = index
+        paintTabs()
+    }
+
+    private fun paintTabs() {
+        tabs.forEachIndexed { i, item ->
+            val pair = item.tag as? Pair<*, *>
+            val icon = pair?.first as? TextView
+            val label = pair?.second as? TextView
+            val color = if (i == activeTab) C.ACCENT else C.MUTED
+            icon?.setTextColor(color)
+            label?.setTextColor(color)
+            label?.typeface = if (i == activeTab) {
+                Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            } else {
+                Typeface.DEFAULT
+            }
+        }
+    }
+
+    /** 启动态覆盖卡片：不需要点任何按钮，服务与页面就绪后自动淡出。 */
+    private fun buildBootOverlay(): View {
+        bootOverlay = FrameLayout(this).apply {
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(
+                    Color.parseColor("#F2E2E9FB"),
+                    Color.parseColor("#F6F0F3FC"),
+                    Color.parseColor("#FAF8F7FD"),
+                ),
+            )
+            isClickable = true
+        }
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            background = rounded(C.SURFACE, 20)
-            setPadding(dp(18), dp(18), dp(18), dp(18))
+            background = rounded(C.SURFACE, 26)
+            elevation = dp(10).toFloat()
+            setPadding(dp(24), dp(24), dp(24), dp(22))
         }
-
-        val header = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        statusDot = View(this).apply {
-            background = circle(C.MUTED, 8)
-        }
-        header.addView(statusDot, LinearLayout.LayoutParams(dp(8), dp(8)))
-        header.addView(spaceH(10))
-        statusTitle = TextView(this).apply {
-            text = "尚未启动"
-            textSize = 17f
+        card.addView(TextView(this).apply {
+            text = "HERMES  AGENT"
+            textSize = 10.5f
+            letterSpacing = 0.22f
+            setTextColor(C.ACCENT)
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            gravity = Gravity.CENTER
+        })
+        card.addView(space(14))
+        bootTitle = TextView(this).apply {
+            text = "正在准备本地服务"
+            textSize = 19f
             setTextColor(C.TEXT)
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            gravity = Gravity.CENTER
         }
-        header.addView(statusTitle)
-        header.addView(View(this).apply { layoutParams = LinearLayout.LayoutParams(0, 1, 1f) })
-        portChip = TextView(this).apply {
-            text = "—"
-            textSize = 11f
-            setTextColor(C.MUTED)
-            background = rounded(C.SURFACE_HI, 8)
-            setPadding(dp(8), dp(4), dp(8), dp(4))
-            visibility = View.GONE
-        }
-        header.addView(portChip)
-        card.addView(header)
-
-        card.addView(space(10))
-        statusDetail = TextView(this).apply {
-            text = "点下面的按钮启动本地服务"
+        card.addView(bootTitle)
+        card.addView(space(8))
+        bootDetail = TextView(this).apply {
+            text = "第一次启动需要解压运行环境，约 1–3 分钟"
             textSize = 12.5f
             setTextColor(C.MUTED)
+            gravity = Gravity.CENTER
             setLineSpacing(dp(3).toFloat(), 1f)
         }
-        card.addView(statusDetail)
+        card.addView(bootDetail)
 
+        card.addView(space(18))
         val track = FrameLayout(this).apply {
             background = rounded(C.TRACK, 3)
             visibility = View.GONE
         }
-        progressFill = View(this).apply {
-            background = rounded(C.ACCENT, 3)
-        }
-        track.addView(progressFill, FrameLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT))
-        progressTrack = track
-        card.addView(space(14))
+        bootFill = View(this).apply { background = rounded(C.ACCENT, 3) }
+        track.addView(bootFill, FrameLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT))
+        bootTrack = track
         card.addView(track, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(4),
         ))
-        return card
-    }
 
-    private fun buildPrimaryButton(): View {
-        primaryButton = TextView(this).apply {
-            text = "启动 Hermes"
-            textSize = 15.5f
-            gravity = Gravity.CENTER
-            setTextColor(Color.WHITE)
-            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-            background = rounded(C.ACCENT, 16)
-            isClickable = true
-            setPadding(0, dp(15), 0, dp(15))
-            setOnClickListener { onPrimary() }
-            EtaMotion.press(this@MainActivity, this)
-        }
-        return primaryButton
-    }
-
-    private fun buildSecondaryRow(): View {
-        secondaryRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-        }
-        secondaryRow.addView(secondaryAction("⚙ 设置") { showSettings() }, weight())
-        secondaryRow.addView(spaceH(10))
-        secondaryRow.addView(secondaryAction("▤ 日志") { toggleLogs() }, weight())
-        secondaryRow.addView(spaceH(10))
-        secondaryRow.addView(secondaryAction("↻ 重启") {
-            if (Runtime.phase == Runtime.Phase.READY) {
-                toast("正在重启本地服务")
-                RuntimeService.restart(this)
-            } else {
-                toast("服务还没跑起来")
-            }
-        }, weight())
-        return secondaryRow
-    }
-
-    private fun secondaryAction(label: String, onClick: () -> Unit): TextView =
-        TextView(this).apply {
-            text = label
-            textSize = 13.5f
-            gravity = Gravity.CENTER
-            setTextColor(C.TEXT)
-            background = rounded(C.SURFACE, 13)
-            isClickable = true
-            setPadding(0, dp(12), 0, dp(12))
-            setOnClickListener { onClick() }
-            EtaMotion.press(this@MainActivity, this)
-        }
-
-    private fun buildLogSection(): View {
-        val wrap = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        logToggle = TextView(this).apply {
+        card.addView(space(16))
+        bootLogToggle = TextView(this).apply {
             text = "运行日志  ›"
-            textSize = 12.5f
-            setTextColor(C.MUTED)
-            setPadding(dp(2), dp(4), dp(2), dp(10))
-            setOnClickListener { toggleLogs() }
+            textSize = 12f
+            setTextColor(C.ACCENT)
+            gravity = Gravity.CENTER
+            setPadding(dp(2), dp(6), dp(2), dp(6))
+            setOnClickListener { toggleBootLogs() }
         }
-        wrap.addView(logToggle)
+        card.addView(bootLogToggle)
 
-        logPanel = LinearLayout(this).apply {
+        bootLogPanel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            background = rounded(C.SURFACE, 14)
-            setPadding(dp(14), dp(12), dp(14), dp(12))
+            background = rounded(C.BG, 14)
+            setPadding(dp(12), dp(10), dp(12), dp(10))
             visibility = View.GONE
         }
-        logText = TextView(this).apply {
-            textSize = 10.5f
+        bootLogText = TextView(this).apply {
+            textSize = 10f
             setTextColor(C.LOG_TEXT)
             typeface = Typeface.MONOSPACE
-            setLineSpacing(dp(2).toFloat(), 1f)
             text = "（暂无日志）"
         }
-        val logScroll = ScrollView(this).apply {
-            isFillViewport = false
-            addView(logText)
-        }
-        logPanel.addView(logScroll, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, dp(190),
+        val logScroll = ScrollView(this).apply { addView(bootLogText) }
+        bootLogPanel.addView(logScroll, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(150),
         ))
-        wrap.addView(logPanel)
-        return wrap
-    }
+        card.addView(bootLogPanel)
 
-    private fun buildFooter(): View =
-        TextView(this).apply {
-            text = "内置 Ubuntu 根环境 · Python 3.12 · 数据只留在本机"
+        card.addView(space(12))
+        card.addView(TextView(this).apply {
+            text = "准备好后会自动进入工作台"
             textSize = 10.5f
             setTextColor(C.FAINT)
             gravity = Gravity.CENTER
-        }
+        })
+
+        bootOverlay.addView(card, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+        ).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            leftMargin = dp(28)
+            rightMargin = dp(28)
+        })
+        return bootOverlay
+    }
 
     // ------------------------------------------------------------ WebView 配置
 
@@ -352,8 +419,9 @@ class MainActivity : Activity() {
         settings.useWideViewPort = true
         settings.builtInZoomControls = false
         settings.displayZoomControls = false
+        // 文件选择器拿到的是 content:// URI，必须允许内容访问，否则选中后读不到内容。
+        settings.allowContentAccess = true
         settings.allowFileAccess = false
-        settings.allowContentAccess = false
         settings.cacheMode = WebSettings.LOAD_DEFAULT
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             settings.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
@@ -368,6 +436,40 @@ class MainActivity : Activity() {
                 consoleMessage?.let { Runtime.log("[web] ${it.message()}") }
                 return true
             }
+
+            /**
+             * 1.0 缺的就是这个：网页里的隐藏 <input type=file> 被 .click() 之后，
+             * WebView 默认不弹系统文件选择器，表现就是「点上传没有任何反应」。
+             */
+            override fun onShowFileChooser(
+                view: WebView?,
+                callback: ValueCallback<Array<Uri>>?,
+                params: WebChromeClient.FileChooserParams?,
+            ): Boolean {
+                filePathCallback?.onReceiveValue(null)
+                filePathCallback = callback
+                val intent = runCatching {
+                    (params?.createIntent() ?: Intent(Intent.ACTION_GET_CONTENT)).apply {
+                        addCategory(Intent.CATEGORY_OPENABLE)
+                        type = if (type.isNullOrBlank()) "*/*" else type
+                        putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                    }
+                }.getOrElse {
+                    filePathCallback = null
+                    return false
+                }
+                return runCatching {
+                    startActivityForResult(intent, REQ_FILE_CHOOSER)
+                    true
+                }.getOrElse {
+                    filePathCallback = null
+                    false
+                }
+            }
+        }
+
+        webView.setDownloadListener { url, _, _, mimeType, _ ->
+            handleDownload(url, mimeType)
         }
 
         webView.webViewClient = object : WebViewClient() {
@@ -383,7 +485,15 @@ class MainActivity : Activity() {
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-                Runtime.log("页面已加载：${url ?: ""}")
+                WebBridge.install(webView, this@MainActivity)
+                if (url != null && (url.startsWith("http://127.0.0.1") ||
+                        url.startsWith("http://localhost"))
+                ) {
+                    Runtime.log("页面已加载：$url")
+                    pageLoaded = true
+                    syncRouteTabs()
+                    maybeHideBoot()
+                }
             }
 
             override fun onReceivedError(
@@ -402,58 +512,128 @@ class MainActivity : Activity() {
     private fun isLocal(uri: Uri): Boolean =
         uri.host == "127.0.0.1" || uri.host == "localhost"
 
-    // ---------------------------------------------------------------- 页面切换
-
-    private fun onPrimary() {
-        when (Runtime.phase) {
-            Runtime.Phase.READY -> enterWorkspace()
-            Runtime.Phase.INSTALLING, Runtime.Phase.STARTING -> toast("正在准备，请稍候")
-            else -> {
-                RuntimeService.start(this)
-                toast("正在启动…")
-            }
-        }
-    }
-
-    private fun enterWorkspace() {
+    private fun loadWorkspace() {
         val url = Runtime.workspaceUrl.ifBlank { "http://127.0.0.1:${Runtime.port}/" }
         if (webView.url == null || !webView.url!!.startsWith("http://127.0.0.1")) {
             webView.loadUrl(url)
         }
-        workspaceVisible = true
-        webHost.visibility = View.VISIBLE
-        EtaMotion.enter(this, webHost, fromDp = 18f)
-        launcherPage.animate().alpha(0f).setDuration(180).start()
-        mainHandler.postDelayed({ launcherPage.visibility = View.GONE }, 180)
-        applyImmersive(true)
     }
 
-    private fun exitWorkspace() {
-        workspaceVisible = false
-        applyImmersive(false)
-        launcherPage.visibility = View.VISIBLE
-        EtaMotion.enter(this, launcherPage, fromDp = 0f)
-        webHost.animate().alpha(0f).setDuration(180)
-            .withEndAction { webHost.visibility = View.GONE }.start()
-        render()
+    private fun maybeHideBoot() {
+        if (!bootVisible || !pageLoaded || Runtime.phase != Runtime.Phase.READY) return
+        bootVisible = false
+        bootOverlay.animate().alpha(0f).setDuration(320)
+            .withEndAction { bootOverlay.visibility = View.GONE }.start()
     }
 
-    private fun applyImmersive(on: Boolean) {
-        val statusBg = Color.parseColor("#E2E9FB")
-        if (on) {
-            @Suppress("DEPRECATION")
-            window.decorView.systemUiVisibility = (
-                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                    or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                    or View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
-                )
-            window.statusBarColor = statusBg
-            window.navigationBarColor = C.SURFACE
-        } else {
-            @Suppress("DEPRECATION")
-            window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
-            window.statusBarColor = statusBg
-            window.navigationBarColor = C.SURFACE
+    // ------------------------------------------------------------------ 文件能力
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == REQ_FILE_CHOOSER) {
+            val callback = filePathCallback
+            filePathCallback = null
+            val uris: Array<Uri>? = if (resultCode != RESULT_OK) null else {
+                val clip: ClipData? = data?.clipData
+                when {
+                    clip != null && clip.itemCount > 0 ->
+                        (0 until clip.itemCount).map { clip.getItemAt(it).uri }.toTypedArray()
+                    data?.data != null -> arrayOf(data.data!!)
+                    else -> null
+                }
+            }
+            callback?.onReceiveValue(uris)
+            return
+        }
+        if (requestCode == REQ_IMPORT) {
+            val dir = importTarget
+            importTarget = null
+            if (resultCode == RESULT_OK && dir != null) {
+                val uris = mutableListOf<Uri>()
+                data?.clipData?.let { clip ->
+                    for (i in 0 until clip.itemCount) uris.add(clip.getItemAt(i).uri)
+                }
+                if (uris.isEmpty()) data?.data?.let { uris.add(it) }
+                copyIntoWorkspace(dir, uris)
+            }
+            return
+        }
+        super.onActivityResult(requestCode, resultCode, data)
+    }
+
+    /** 系统文件选择器选中的文件真正落到手机存储的工作区目录。 */
+    private fun copyIntoWorkspace(dir: File, uris: List<Uri>) {
+        if (uris.isEmpty()) return
+        var ok = 0
+        runCatching { dir.mkdirs() }
+        uris.forEach { uri ->
+            val name = runCatching {
+                contentResolver.query(uri, null, null, null, null)?.use { c ->
+                    val idx = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                    if (idx >= 0 && c.moveToFirst()) c.getString(idx) else null
+                }
+            }.getOrNull() ?: "file-${System.currentTimeMillis()}"
+            val safe = name.replace(Regex("[/\\\\]"), "_")
+            runCatching {
+                contentResolver.openInputStream(uri)?.use { input ->
+                    File(dir, safe).outputStream().use { output -> input.copyTo(output) }
+                }
+                ok++
+            }
+        }
+        toast(if (ok > 0) "已导入 $ok 个文件到工作区" else "导入失败，请重试")
+        if (ok > 0 && Runtime.phase == Runtime.Phase.READY) WebBridge.reload(webView)
+    }
+
+    /** 网页里的 <a download> / data: 下载在 WebView 里不会自动落盘。 */
+    private fun handleDownload(url: String, mimeType: String?) {
+        if (url.startsWith("data:")) {
+            val comma = url.indexOf(',')
+            if (comma < 0) return
+            val meta = url.substring(5, comma)
+            val payload = url.substring(comma + 1)
+            val bytes = runCatching {
+                if (meta.contains(";base64")) Base64.decode(payload, Base64.DEFAULT)
+                else java.net.URLDecoder.decode(payload, "UTF-8").toByteArray()
+            }.getOrElse { return }
+            val ext = when {
+                (mimeType ?: "").contains("json") -> "json"
+                (mimeType ?: "").contains("pdf") -> "pdf"
+                (mimeType ?: "").contains("image/png") -> "png"
+                else -> "txt"
+            }
+            val dir = runCatching {
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            }.getOrNull() ?: cacheDir
+            val file = File(dir, "hermes-${System.currentTimeMillis()}.$ext")
+            runCatching {
+                dir.mkdirs()
+                file.writeBytes(bytes)
+                toast("已保存到 ${file.absolutePath}")
+            }.onFailure { toast("保存失败：${it.message}") }
+            return
+        }
+        runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+            .onFailure { toast("无法打开下载链接") }
+    }
+
+    // ------------------------------------------------------------------ 路由同步
+
+    private fun syncRouteTabs() {
+        if (Runtime.phase != Runtime.Phase.READY) return
+        runCatching {
+            WebBridge.currentRoute(webView) { path ->
+                runOnUiThread {
+                    val index = when {
+                        path.startsWith("/chat") -> 1
+                        path.startsWith("/files") -> 2
+                        path.startsWith("/skills") -> 3
+                        path.startsWith("/sessions") -> 0
+                        path == "/" -> 0
+                        else -> -1
+                    }
+                    if (index >= 0 && index != activeTab) setActiveTab(index)
+                }
+            }
         }
     }
 
@@ -461,15 +641,8 @@ class MainActivity : Activity() {
 
     private fun render() {
         val phase = Runtime.phase
-        statusTitle.text = Runtime.title
-        statusDetail.text = Runtime.detail.ifBlank {
-            when (phase) {
-                Runtime.Phase.IDLE -> "点下面的按钮启动本地服务"
-                Runtime.Phase.STOPPED -> "服务已停止"
-                Runtime.Phase.READY -> "Hermes 面板已就绪"
-                else -> ""
-            }
-        }
+        if (phase == Runtime.Phase.READY && Runtime.port > 0) loadWorkspace()
+
         statusDot.background = circle(
             when (phase) {
                 Runtime.Phase.READY -> C.OK
@@ -477,67 +650,261 @@ class MainActivity : Activity() {
                 Runtime.Phase.INSTALLING, Runtime.Phase.STARTING -> C.WARN
                 else -> C.MUTED
             },
-            8,
+            7,
         )
-
-        if (phase == Runtime.Phase.READY && Runtime.port > 0) {
-            portChip.visibility = View.VISIBLE
-            portChip.text = "127.0.0.1:${Runtime.port}"
+        val current = Workspaces.current(this)
+        headerSub.text = if (current.isNotEmpty()) {
+            "本机 · ${Workspaces.displayName(current)}"
         } else {
-            portChip.visibility = View.GONE
+            "本机 · 默认工作区"
+        }
+
+        if (!bootVisible) return
+        bootTitle.text = when (phase) {
+            Runtime.Phase.READY -> "工作台已就绪"
+            Runtime.Phase.ERROR -> "启动遇到问题"
+            Runtime.Phase.INSTALLING -> "正在解压运行环境"
+            Runtime.Phase.STARTING -> "正在启动本地服务"
+            Runtime.Phase.STOPPED -> "服务已停止"
+            else -> "正在准备本地服务"
+        }
+        bootDetail.text = Runtime.detail.ifBlank {
+            when (phase) {
+                Runtime.Phase.READY -> "正在载入面板…"
+                Runtime.Phase.ERROR -> "展开日志看看具体报错，或在设置里重新安装"
+                Runtime.Phase.INSTALLING -> "第一次启动需要解压运行环境，约 1–3 分钟"
+                Runtime.Phase.STARTING -> "Python 服务启动中，请稍候"
+                Runtime.Phase.STOPPED -> "正在重新拉起服务"
+                else -> "准备好后会自动进入工作台"
+            }
         }
 
         val progress = Runtime.progress
         if (progress in 0..100) {
-            progressTrack.visibility = View.VISIBLE
-            val width = (progressTrack.width * progress / 100f).toInt()
-            progressFill.layoutParams = FrameLayout.LayoutParams(
+            bootTrack.visibility = View.VISIBLE
+            val width = (bootTrack.width * progress / 100f).toInt()
+            bootFill.layoutParams = FrameLayout.LayoutParams(
                 if (width > 0) width else 0, ViewGroup.LayoutParams.MATCH_PARENT,
             )
-            progressFill.requestLayout()
+            bootFill.requestLayout()
         } else {
-            progressTrack.visibility = View.GONE
+            bootTrack.visibility = View.GONE
         }
-
-        primaryButton.text = when (phase) {
-            Runtime.Phase.READY -> "进入工作台"
-            Runtime.Phase.INSTALLING -> "正在安装…"
-            Runtime.Phase.STARTING -> "正在启动…"
-            Runtime.Phase.ERROR -> "重试"
-            else -> "启动 Hermes"
-        }
-        primaryButton.background = rounded(
-            if (phase == Runtime.Phase.READY) C.ACCENT else C.ACCENT_DIM,
-            16,
-        )
 
         if (logsExpanded && lastLogVersion != Runtime.logVersion) {
             lastLogVersion = Runtime.logVersion
             val lines = Runtime.snapshotLogs()
-            logText.text = if (lines.isEmpty()) "（暂无日志）" else lines.takeLast(120).joinToString("\n")
-            (logText.parent as? View)?.post {
-                (logText.parent as? ScrollView)?.fullScroll(View.FOCUS_DOWN)
+            bootLogText.text = if (lines.isEmpty()) "（暂无日志）"
+            else lines.takeLast(120).joinToString("\n")
+            (bootLogText.parent as? View)?.post {
+                (bootLogText.parent as? ScrollView)?.fullScroll(View.FOCUS_DOWN)
             }
         }
-
-        if (lastPhase != phase) {
-            lastPhase = phase
-            if (phase == Runtime.Phase.READY) EtaMotion.pop(this, statusDot)
-        }
+        maybeHideBoot()
     }
 
-    private fun toggleLogs() {
+    private fun toggleBootLogs() {
         logsExpanded = !logsExpanded
-        logPanel.visibility = if (logsExpanded) View.VISIBLE else View.GONE
-        logToggle.text = if (logsExpanded) "运行日志  ⌄" else "运行日志  ›"
+        bootLogPanel.visibility = if (logsExpanded) View.VISIBLE else View.GONE
+        bootLogToggle.text = if (logsExpanded) "运行日志  ⌄" else "运行日志  ›"
         lastLogVersion = -1
-        if (logsExpanded) {
-            EtaMotion.enter(this, logPanel, fromDp = 8f)
-            render()
+        if (logsExpanded) render()
+    }
+
+    // ------------------------------------------------------------ 工作区管理弹层
+
+    private fun showWorkspaceSheet() {
+        EtaSheet.show(this, "工作区", tall = false) { sheet ->
+            sheet.body.addView(TextView(this).apply {
+                text = "工作区是 Agent 读写的真实目录。新建后会自动切到该目录开一个新会话。"
+                textSize = 12.5f
+                setTextColor(C.MUTED)
+                setLineSpacing(dp(3).toFloat(), 1f)
+                setPadding(0, dp(2), 0, dp(12))
+            })
+
+            sheet.body.addView(sectionLabel("当前"))
+            sheet.body.addView(space(6))
+            val current = Workspaces.current(this)
+            sheet.body.addView(TextView(this).apply {
+                text = if (current.isNotEmpty()) current else "默认工作目录（未选择）"
+                textSize = 12.5f
+                setTextColor(C.TEXT)
+                typeface = Typeface.MONOSPACE
+                background = rounded(C.SURFACE_HI, 12)
+                setPadding(dp(14), dp(12), dp(14), dp(12))
+            })
+
+            val existing = Workspaces.list(this)
+            sheet.body.addView(space(16))
+            sheet.body.addView(sectionLabel("已创建 (${existing.size})"))
+            sheet.body.addView(space(6))
+            if (existing.isEmpty()) {
+                sheet.body.addView(TextView(this).apply {
+                    text = "还没有工作区，在下面输入名字新建一个"
+                    textSize = 12f
+                    setTextColor(C.FAINT)
+                    setPadding(dp(4), dp(4), dp(4), dp(8))
+                })
+            } else {
+                existing.forEach { path ->
+                    val row = actionRow(Workspaces.displayName(path)) {
+                        sheet.dismiss()
+                        openWorkspace(path)
+                    }
+                    sheet.body.addView(row)
+                    sheet.body.addView(space(6))
+                }
+            }
+
+            sheet.body.addView(space(14))
+            sheet.body.addView(sectionLabel("新建"))
+            sheet.body.addView(space(6))
+            val input = EditText(this).apply {
+                hint = "例如：我的项目 / demo / 工作"
+                textSize = 15f
+                inputType = InputType.TYPE_CLASS_TEXT
+                setTextColor(C.TEXT)
+                setHintTextColor(C.FAINT)
+                background = rounded(C.SURFACE_HI, 12)
+                setPadding(dp(14), dp(12), dp(14), dp(12))
+            }
+            sheet.body.addView(input)
+            sheet.body.addView(space(12))
+            sheet.body.addView(TextView(this).apply {
+                text = "目录会建在：${Workspaces.root(this@MainActivity).absolutePath}"
+                textSize = 11f
+                setTextColor(C.FAINT)
+                setPadding(dp(2), 0, dp(2), dp(4))
+            })
+
+            // 快捷操作：手机 App 常用动作，不需要回到网页里翻菜单
+            sheet.body.addView(space(16))
+            sheet.body.addView(sectionLabel("快捷操作"))
+            sheet.body.addView(space(6))
+            sheet.body.addView(actionRow("上传文件到当前工作区") {
+                sheet.dismiss()
+                pickFilesForWorkspace()
+            })
+            sheet.body.addView(space(6))
+            sheet.body.addView(actionRow("打开终端 / 新建会话") {
+                sheet.dismiss()
+                setActiveTab(1)
+                if (Runtime.phase == Runtime.Phase.READY) WebBridge.navigate(webView, "/chat")
+            })
+            sheet.body.addView(space(6))
+            sheet.body.addView(actionRow("刷新当前页面") {
+                sheet.dismiss()
+                if (Runtime.phase == Runtime.Phase.READY) WebBridge.reload(webView)
+            })
+
+            val (row, _) = EtaSheet.dualButtons(
+                this, getString(R.string.action_cancel), "新建并进入",
+                onCancel = { sheet.dismiss() },
+                onConfirm = {
+                    val result = Workspaces.create(this, input.text.toString())
+                    result.fold(
+                        onSuccess = { path ->
+                            sheet.dismiss()
+                            openWorkspace(path)
+                        },
+                        onFailure = { toast(it.message ?: "创建失败") },
+                    )
+                },
+            )
+            sheet.footer.addView(row)
         }
     }
 
-    // -------------------------------------------------------------------- 设置
+    private fun openWorkspace(path: String) {
+        Workspaces.setCurrent(this, path)
+        headerSub.text = "本机 · ${Workspaces.displayName(path)}"
+        if (Runtime.phase != Runtime.Phase.READY) {
+            toast("工作区已保存，服务就绪后进入终端生效")
+            return
+        }
+        // 一次原子脚本完成「写入面板存储 + 整页进入 /chat」，保证 ChatPage
+        // 重新挂载时读到的是新工作区，不会被异步导航打断。
+        WebBridge.openWorkspace(webView, path)
+        toast("已切换到 ${Workspaces.displayName(path)}")
+        setActiveTab(1)
+    }
+
+    private fun pickFilesForWorkspace() {
+        val target = Workspaces.current(this).ifEmpty { Prefs.workspace(this) }
+        val dir = File(target)
+        val created = dir.isDirectory || runCatching { dir.mkdirs() }.getOrDefault(false)
+        if (!created) {
+            toast("工作目录不可写，请到设置里更换")
+            return
+        }
+        importTarget = dir
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+        }
+        runCatching { startActivityForResult(intent, REQ_IMPORT) }
+            .onFailure { toast("无法打开文件选择器") }
+    }
+
+    // ------------------------------------------------------------ 更多 / 设置
+
+    private fun showMore() {
+        EtaSheet.show(this, "更多", tall = false) { sheet ->
+            sheet.body.addView(actionRow("运行日志") {
+                sheet.dismiss()
+                EtaSheet.show(this@MainActivity, "运行日志", tall = true) { logSheet ->
+                    val logText = TextView(this@MainActivity).apply {
+                        text = Runtime.snapshotLogs().takeLast(300).joinToString("\n")
+                            .ifEmpty { "（暂无日志）" }
+                        textSize = 10.5f
+                        setTextColor(C.LOG_TEXT)
+                        typeface = Typeface.MONOSPACE
+                        setLineSpacing(dp(2).toFloat(), 1f)
+                    }
+                    logSheet.body.addView(ScrollView(this@MainActivity).apply { addView(logText) })
+                    val (row, _) = EtaSheet.dualButtons(
+                        this@MainActivity, "关闭", "导出日志",
+                        onCancel = { logSheet.dismiss() },
+                        onConfirm = { logSheet.dismiss(); exportLogs() },
+                    )
+                    logSheet.footer.addView(row)
+                }
+            })
+            sheet.body.addView(space(8))
+            sheet.body.addView(actionRow("刷新页面") {
+                sheet.dismiss()
+                if (Runtime.phase == Runtime.Phase.READY) WebBridge.reload(webView)
+            })
+            sheet.body.addView(space(8))
+            sheet.body.addView(actionRow("重启本地服务") {
+                sheet.dismiss()
+                if (Runtime.phase == Runtime.Phase.READY) {
+                    toast("正在重启本地服务")
+                    RuntimeService.restart(this)
+                } else {
+                    toast("服务还没跑起来")
+                }
+            })
+            sheet.body.addView(space(8))
+            sheet.body.addView(actionRow("导出日志") { sheet.dismiss(); exportLogs() })
+            sheet.body.addView(space(8))
+            sheet.body.addView(TextView(this).apply {
+                text = "Hermes Agent · 本机运行 · 数据只留在这台手机"
+                textSize = 11f
+                setTextColor(C.FAINT)
+                gravity = Gravity.CENTER
+                setPadding(0, dp(12), 0, dp(4))
+            })
+            val (row, _) = EtaSheet.dualButtons(
+                this, "关闭", "设置",
+                onCancel = { sheet.dismiss() },
+                onConfirm = { sheet.dismiss(); showSettings() },
+            )
+            sheet.footer.addView(row)
+        }
+    }
 
     private fun showSettings() {
         EtaSheet.show(this, getString(R.string.settings_title), tall = true) { sheet ->
@@ -552,9 +919,7 @@ class MainActivity : Activity() {
             sheet.body.addView(space(10))
             sheet.body.addView(toggleRow("局域网访问", "让同一 Wi-Fi 下的电脑也能打开面板", Prefs.lan(this)) {
                 Prefs.setLan(this, it)
-                if (Runtime.phase == Runtime.Phase.READY) {
-                    toast("重启后生效")
-                }
+                if (Runtime.phase == Runtime.Phase.READY) toast("重启后生效")
             })
             sheet.body.addView(space(10))
             sheet.body.addView(toggleRow("全自主执行", "读写文件、跑命令不再逐条询问", Prefs.yolo(this)) {
@@ -572,9 +937,16 @@ class MainActivity : Activity() {
             sheet.body.addView(space(10))
             sheet.body.addView(actionRow("导出日志") { exportLogs() })
             sheet.body.addView(space(10))
-            sheet.body.addView(actionRow("重新安装运行环境", danger = true) {
-                sheet.dismiss()
-                confirmReinstall()
+            sheet.body.addView(TextView(this).apply {
+                text = "重新安装运行环境"
+                textSize = 13.5f
+                gravity = Gravity.CENTER_VERTICAL
+                setTextColor(C.ERR)
+                background = rounded(C.SURFACE, 14)
+                setPadding(dp(16), dp(15), dp(16), dp(15))
+                isClickable = true
+                setOnClickListener { sheet.dismiss(); confirmReinstall() }
+                EtaMotion.press(this@MainActivity, this)
             })
 
             val (row, _) = EtaSheet.dualButtons(
@@ -607,7 +979,7 @@ class MainActivity : Activity() {
         }
         wrap.addView(input)
         wrap.addView(space(10))
-        val save = TextView(this).apply {
+        wrap.addView(TextView(this).apply {
             text = "保存端口"
             textSize = 12.5f
             gravity = Gravity.CENTER
@@ -623,8 +995,7 @@ class MainActivity : Activity() {
                     toast("已保存，重启后生效")
                 }
             }
-        }
-        wrap.addView(save)
+        })
         return wrap
     }
 
@@ -682,9 +1053,7 @@ class MainActivity : Activity() {
             isClickable = true
             EtaMotion.press(this@MainActivity, this)
         }
-        val dot = View(this).apply {
-            background = circle(if (value) C.BG else C.MUTED, 11)
-        }
+        val dot = View(this).apply { background = circle(if (value) C.BG else C.MUTED, 11) }
         switch.addView(dot, FrameLayout.LayoutParams(dp(18), dp(18)).apply {
             gravity = Gravity.CENTER_VERTICAL
             leftMargin = if (value) dp(26) else dp(4)
@@ -698,7 +1067,6 @@ class MainActivity : Activity() {
             onChange(value)
         }
         wrap.addView(switch, LinearLayout.LayoutParams(dp(48), dp(26)))
-
         return wrap
     }
 
@@ -800,6 +1168,13 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun applyImmersive() {
+        @Suppress("DEPRECATION")
+        window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+        window.statusBarColor = Color.parseColor("#E2E9FB")
+        window.navigationBarColor = C.SURFACE
+    }
+
     private fun requestNotificationPermission() {
         if (Build.VERSION.SDK_INT >= 33) {
             if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
@@ -842,21 +1217,24 @@ class MainActivity : Activity() {
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         if (keyCode == KeyEvent.KEYCODE_BACK) {
-            if (workspaceVisible) {
-                if (webView.canGoBack()) {
-                    webView.goBack()
-                } else {
-                    exitWorkspace()
-                }
+            if (webView.canGoBack()) {
+                webView.goBack()
                 return true
             }
+            val now = System.currentTimeMillis()
+            if (now - backPressedAt < 2000) {
+                finish()
+            } else {
+                backPressedAt = now
+                toast("再按一次退出")
+            }
+            return true
         }
         return super.onKeyDown(keyCode, event)
     }
 
     // -------------------------------------------------------------------- 工具
 
-    /** DSH-Go 风格圆形白色按钮。 */
     private fun circleButton(label: String, onClick: () -> Unit): TextView =
         TextView(this).apply {
             text = label
@@ -871,7 +1249,6 @@ class MainActivity : Activity() {
             EtaMotion.press(this@MainActivity, this)
         }
 
-    /** 淡蓝紫 -> 近白的纵向渐变背景，对应 DSH-Go 原生界面。 */
     private fun bgGradient(): GradientDrawable = GradientDrawable(
         GradientDrawable.Orientation.TOP_BOTTOM,
         intArrayOf(
@@ -892,9 +1269,6 @@ class MainActivity : Activity() {
     private fun spaceH(value: Int): View = View(this).apply {
         layoutParams = LinearLayout.LayoutParams(dp(value), 1)
     }
-
-    private fun weight(): LinearLayout.LayoutParams =
-        LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
 
     private fun rounded(color: Int, radius: Int): GradientDrawable =
         GradientDrawable().apply {
@@ -920,7 +1294,6 @@ class MainActivity : Activity() {
         val SURFACE_HI = Color.parseColor("#EEF1F9")
         val TRACK = Color.parseColor("#E4E8F3")
         val ACCENT = Color.parseColor("#5266AF")
-        val ACCENT_DIM = Color.parseColor("#AAB6DE")
         val TEXT = Color.parseColor("#1B2235")
         val MUTED = Color.parseColor("#6B7288")
         val FAINT = Color.parseColor("#9AA2B6")

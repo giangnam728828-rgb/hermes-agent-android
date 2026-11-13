@@ -91,6 +91,11 @@ jobs:
           cd android
           gradle :app:assembleRelease --no-daemon
 
+      - name: Name release APK
+        run: |
+          cp android/app/build/outputs/apk/release/app-release.apk \
+             android/app/build/outputs/apk/release/Hermes-Agent-Android-${{ env.VERSION_NAME }}.apk
+
       - name: Checksum and fingerprint
         run: |
           APK=android/app/build/outputs/apk/release/app-release.apk
@@ -115,7 +120,7 @@ jobs:
             Hermes Agent 安卓封装（内置 Ubuntu 根环境 + Python 3.12 + Hermes ${{ env.VERSION_NAME }}）。
             直接安装 APK，首次启动会自动解压运行环境。
           files: |
-            android/app/build/outputs/apk/release/app-release.apk
+            android/app/build/outputs/apk/release/Hermes-Agent-Android-${{ env.VERSION_NAME }}.apk
             android/app/src/main/assets/hermes-rootfs-arm64.tar.gz
           fail_on_unmatched_files: false
 

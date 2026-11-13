@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 env:
   VERSION_NAME: "0.1.0"
 
@@ -91,6 +94,12 @@ jobs:
           "$BUILD_TOOLS/aapt" dump badging "$APK" | grep -E "^package"
           "$BUILD_TOOLS/apksigner" verify --print-certs "$APK" | grep -i "SHA-256"
 
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hermes-agent-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
+
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
@@ -104,7 +113,3 @@ jobs:
             android/app/src/main/assets/hermes-rootfs-arm64.tar.gz
           fail_on_unmatched_files: false
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: hermes-agent-apk
-          path: android/app/build/outputs/apk/release/app-release.apk

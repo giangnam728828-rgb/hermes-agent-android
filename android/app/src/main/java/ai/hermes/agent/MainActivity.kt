@@ -91,7 +91,7 @@ class MainActivity : Activity() {
 
     private fun buildUi() {
         container = FrameLayout(this)
-        container.setBackgroundColor(C.BG)
+        container.background = bgGradient()
 
         launcherPage = ScrollView(this).apply {
             isFillViewport = true
@@ -118,7 +118,7 @@ class MainActivity : Activity() {
         column.addView(buildFooter())
 
         webHost = FrameLayout(this).apply {
-            setBackgroundColor(C.BG)
+            setBackgroundColor(Color.parseColor("#F3F5FC"))
             visibility = View.GONE
         }
         webView = WebView(this)
@@ -138,20 +138,46 @@ class MainActivity : Activity() {
 
     private fun buildBrand(): View {
         val wrap = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        wrap.addView(TextView(this).apply {
-            text = "NOUS  RESEARCH"
-            textSize = 10f
-            letterSpacing = 0.32f
-            setTextColor(C.ACCENT)
+
+        // DSH-Go 风格顶部栏：圆形按钮 + 胶囊标题 + 圆形按钮
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        header.addView(circleButton("☰") { showSettings() })
+        val pill = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            background = rounded(C.SURFACE, 22)
+            setPadding(dp(18), dp(8), dp(18), dp(8))
+            elevation = dp(3).toFloat()
+        }
+        pill.addView(TextView(this).apply {
+            text = "Hermes Agent"
+            textSize = 14.5f
+            setTextColor(C.TEXT)
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            gravity = Gravity.CENTER
         })
-        wrap.addView(space(8))
+        pill.addView(TextView(this).apply {
+            text = "● 本机 · workspace"
+            textSize = 10.5f
+            setTextColor(C.OK)
+            gravity = Gravity.CENTER
+        })
+        header.addView(pill, LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f,
+        ).apply { leftMargin = dp(12); rightMargin = dp(12) })
+        header.addView(circleButton("✎") { onPrimary() })
+        wrap.addView(header)
+
+        wrap.addView(space(28))
         wrap.addView(TextView(this).apply {
             text = "Hermes Agent"
-            textSize = 31f
+            textSize = 28f
             letterSpacing = -0.02f
             setTextColor(C.TEXT)
-            typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
         })
         wrap.addView(space(6))
         wrap.addView(TextView(this).apply {
@@ -227,7 +253,7 @@ class MainActivity : Activity() {
             text = "启动 Hermes"
             textSize = 15.5f
             gravity = Gravity.CENTER
-            setTextColor(C.BG)
+            setTextColor(Color.WHITE)
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
             background = rounded(C.ACCENT, 16)
             isClickable = true
@@ -242,11 +268,11 @@ class MainActivity : Activity() {
         secondaryRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
         }
-        secondaryRow.addView(secondaryAction("设置") { showSettings() }, weight())
+        secondaryRow.addView(secondaryAction("⚙ 设置") { showSettings() }, weight())
         secondaryRow.addView(spaceH(10))
-        secondaryRow.addView(secondaryAction("日志") { toggleLogs() }, weight())
+        secondaryRow.addView(secondaryAction("▤ 日志") { toggleLogs() }, weight())
         secondaryRow.addView(spaceH(10))
-        secondaryRow.addView(secondaryAction("重启") {
+        secondaryRow.addView(secondaryAction("↻ 重启") {
             if (Runtime.phase == Runtime.Phase.READY) {
                 toast("正在重启本地服务")
                 RuntimeService.restart(this)
@@ -316,7 +342,7 @@ class MainActivity : Activity() {
     // ------------------------------------------------------------ WebView 配置
 
     private fun configureWebView() {
-        webView.setBackgroundColor(C.BG)
+        webView.setBackgroundColor(Color.parseColor("#F3F5FC"))
         val settings: WebSettings = webView.settings
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
@@ -413,16 +439,20 @@ class MainActivity : Activity() {
     }
 
     private fun applyImmersive(on: Boolean) {
+        val statusBg = Color.parseColor("#E2E9FB")
         if (on) {
             @Suppress("DEPRECATION")
             window.decorView.systemUiVisibility = (
                 View.SYSTEM_UI_FLAG_LAYOUT_STABLE
                     or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                    or View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
                 )
-            window.statusBarColor = C.BG
-            window.navigationBarColor = C.BG
+            window.statusBarColor = statusBg
+            window.navigationBarColor = C.SURFACE
         } else {
-            window.statusBarColor = C.BG
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+            window.statusBarColor = statusBg
             window.navigationBarColor = C.SURFACE
         }
     }
@@ -826,6 +856,31 @@ class MainActivity : Activity() {
 
     // -------------------------------------------------------------------- 工具
 
+    /** DSH-Go 风格圆形白色按钮。 */
+    private fun circleButton(label: String, onClick: () -> Unit): TextView =
+        TextView(this).apply {
+            text = label
+            textSize = 17f
+            gravity = Gravity.CENTER
+            setTextColor(C.TEXT)
+            background = rounded(C.SURFACE, 24)
+            elevation = dp(3).toFloat()
+            isClickable = true
+            setOnClickListener { onClick() }
+            layoutParams = LinearLayout.LayoutParams(dp(46), dp(46))
+            EtaMotion.press(this@MainActivity, this)
+        }
+
+    /** 淡蓝紫 -> 近白的纵向渐变背景，对应 DSH-Go 原生界面。 */
+    private fun bgGradient(): GradientDrawable = GradientDrawable(
+        GradientDrawable.Orientation.TOP_BOTTOM,
+        intArrayOf(
+            Color.parseColor("#E2E9FB"),
+            Color.parseColor("#F0F3FC"),
+            Color.parseColor("#F8F7FD"),
+        ),
+    )
+
     private fun dp(value: Int): Int = TypedValue.applyDimension(
         TypedValue.COMPLEX_UNIT_DIP, value.toFloat(), resources.displayMetrics,
     ).toInt()
@@ -858,20 +913,20 @@ class MainActivity : Activity() {
         Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
     }
 
-    /** 与 Hermes 面板一致的深色配色。 */
+    /** DSH-Go 原生界面风格：淡紫蓝渐变 + 白色圆角卡片 + 蓝紫主色。 */
     private object C {
-        val BG = Color.parseColor("#0A0A0F")
-        val SURFACE = Color.parseColor("#14141C")
-        val SURFACE_HI = Color.parseColor("#1E1E28")
-        val TRACK = Color.parseColor("#26262F")
-        val ACCENT = Color.parseColor("#E8B44A")
-        val ACCENT_DIM = Color.parseColor("#8A6A2C")
-        val TEXT = Color.parseColor("#F2F2F5")
-        val MUTED = Color.parseColor("#8B8B96")
-        val FAINT = Color.parseColor("#5C5C66")
-        val OK = Color.parseColor("#4ADE80")
-        val WARN = Color.parseColor("#FBBF24")
-        val ERR = Color.parseColor("#F87171")
-        val LOG_TEXT = Color.parseColor("#A8A8B4")
+        val BG = Color.parseColor("#EFF2FB")
+        val SURFACE = Color.parseColor("#FFFFFF")
+        val SURFACE_HI = Color.parseColor("#EEF1F9")
+        val TRACK = Color.parseColor("#E4E8F3")
+        val ACCENT = Color.parseColor("#5266AF")
+        val ACCENT_DIM = Color.parseColor("#AAB6DE")
+        val TEXT = Color.parseColor("#1B2235")
+        val MUTED = Color.parseColor("#6B7288")
+        val FAINT = Color.parseColor("#9AA2B6")
+        val OK = Color.parseColor("#1F9D6B")
+        val WARN = Color.parseColor("#E08A2B")
+        val ERR = Color.parseColor("#D9534F")
+        val LOG_TEXT = Color.parseColor("#4A5266")
     }
 }

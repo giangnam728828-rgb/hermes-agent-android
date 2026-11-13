@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hermes Agent · DSH-Go 风格 UI 对比（示意）</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:24px;background:#0C0F16;color:#E9EDF6;font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+h1{font-size:20px;margin:0 0 6px;font-weight:600}
+.note{color:#8B92A6;font-size:12.5px;margin:0 0 20px;line-height:1.75;max-width:900px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media(max-width:880px){.grid{grid-template-columns:1fr}}
+.label{font-size:12px;letter-spacing:.08em;margin-bottom:9px;color:#8B92A6}
+.phone{border:1px solid #2A3040;border-radius:26px;overflow:hidden;height:520px;display:flex;flex-direction:column}
+.phone .status{height:26px;font-size:10px;display:flex;align-items:center;justify-content:space-between;padding:0 16px}
+/* 旧版：深色 */
+.old{--bg:#0A0A0F;--card:#14141C;--text:#F2F2F5;--sub:#8B8B96;--acc:#E8B44A;--radius:14px;background:var(--bg);color:var(--text)}
+.old .status{background:var(--bg);color:var(--sub)}
+.old .content{padding:18px;flex:1;overflow:auto}
+.brand{font-size:26px;font-weight:300;letter-spacing:-.02em}
+.kicker{font-size:9px;letter-spacing:.32em;color:var(--acc);margin-bottom:8px}
+/* 新版：DSH-Go 浅色 */
+.new{background:linear-gradient(180deg,#E2E9FB 0%,#F0F3FC 34%,#F8F7FD 100%);color:#1B2235}
+.new .status{background:#E2E9FB;color:#6B7288}
+.new .content{padding:14px 16px;flex:1;overflow:auto}
+.bar{display:flex;align-items:center;gap:10px;margin-bottom:22px}
+.circle{width:40px;height:40px;flex:none;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 3px 10px rgba(27,34,53,.08);color:#1B2235}
+.pill{flex:1;background:#fff;border-radius:22px;padding:7px 14px;text-align:center;box-shadow:0 3px 10px rgba(27,34,53,.08)}
+.pill b{display:block;font-size:13.5px}
+.pill span{display:block;font-size:10px;color:#1F9D6B;margin-top:1px}
+.card{background:#fff;border-radius:20px;padding:16px;box-shadow:0 4px 16px rgba(27,34,53,.06);margin-bottom:12px}
+.card .h{font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px}
+.dot{width:8px;height:8px;border-radius:50%;background:#1F9D6B}
+.card .d{font-size:12px;color:#6B7288;margin-top:7px;line-height:1.6}
+.chip{display:inline-block;background:#EEF1F9;border-radius:8px;padding:3px 9px;font-size:10.5px;color:#5266AF;margin-top:9px}
+.primary{background:#5266AF;color:#fff;border-radius:16px;padding:13px;text-align:center;font-size:14.5px;font-weight:600;margin-bottom:10px}
+.row{display:flex;gap:8px}
+.row div{flex:1;background:#fff;border-radius:13px;padding:11px;text-align:center;font-size:12.5px;color:#1B2235;box-shadow:0 3px 10px rgba(27,34,53,.05)}
+.sec{font-size:10.5px;letter-spacing:.18em;color:#5266AF;margin:16px 0 8px 4px}
+.setrow{display:flex;align-items:center;gap:11px;background:#fff;border-radius:16px;padding:11px 13px;margin-bottom:8px}
+.ico{width:34px;height:34px;border-radius:50%;background:#E4E8F8;display:flex;align-items:center;justify-content:center;font-size:15px}
+.setrow .t{flex:1;font-size:13.5px;font-weight:500}
+.setrow .v{font-size:11.5px;color:#8B92A6}
+footer{margin-top:20px;color:#7A8296;font-size:11.5px;line-height:1.8;max-width:900px}
+</style></head><body>
+<h1>Hermes Agent · UI 改造对比</h1>
+<p class="note">视觉示意，不是真机截图。左：0.1.0 深色启动页。右：按 DSH-Go 原生版重做的浅色界面（淡紫蓝渐变 + 白色圆角卡片 + 蓝紫主色 + 胶囊顶栏 + 分组设置）。工作台 WebView 注入同一套浅色皮肤，功能完整保留。</p>
+<div class="grid">
+  <div><div class="label">0.1.0 现状（深色）</div>
+    <div class="phone old"><div class="status"><span>21:13</span><span>5G ▮</span></div>
+      <div class="content">
+        <div class="kicker">NOUS RESEARCH</div><div class="brand">Hermes Agent</div>
+        <div style="font-size:12px;color:#8B8B96;margin:6px 0 26px">会自己长出技能的智能体 · 手机上直接跑</div>
+        <div class="card" style="background:#14141C"><div class="h"><span class="dot" style="background:#8B8B96"></span>尚未启动</div><div class="d" style="color:#8B8B96">点下面的按钮启动本地服务</div></div>
+        <div class="primary" style="background:#E8B44A;color:#0A0A0F">启动 Hermes</div>
+        <div class="row"><div style="background:#14141C;color:#F2F2F5">设置</div><div style="background:#14141C;color:#F2F2F5">日志</div><div style="background:#14141C;color:#F2F2F5">重启</div></div>
+      </div></div></div>
+  <div><div class="label">本轮改造（DSH-Go 浅色原生风）</div>
+    <div class="phone new"><div class="status"><span>21:13</span><span>5G ▮</span></div>
+      <div class="content">
+        <div class="bar"><div class="circle">☰</div><div class="pill"><b>Hermes Agent</b><span>● 本机 · workspace</span></div><div class="circle">✎</div></div>
+        <div style="font-size:24px;font-weight:600;margin-bottom:4px">Hermes Agent</div>
+        <div style="font-size:12px;color:#6B7288;margin-bottom:18px">会自己长出技能的智能体 · 手机上直接跑</div>
+        <div class="card"><div class="h"><span class="dot"></span>面板已就绪</div><div class="d">Hermes 面板已就绪，数据只留在本机</div><span class="chip">127.0.0.1:9119</span></div>
+        <div class="primary">进入工作台</div>
+        <div class="row"><div>⚙ 设置</div><div>▤ 日志</div><div>↻ 重启</div></div>
+        <div class="sec">运行</div>
+        <div class="setrow"><div class="ico">🛡</div><div class="t">全自主执行</div><div class="v">已开启 ›</div></div>
+        <div class="setrow"><div class="ico">🌐</div><div class="t">局域网访问</div><div class="v">未开启 ›</div></div>
+      </div></div></div>
+</div>
+<footer>改动：原生壳（MainActivity / EtaUi / themes.xml）换配色与形状；WebView 面板注入 hermes-skin.css 同步浅色。注入只覆盖 CSS 变量与通用元素，不改 DOM / 路由 / 接口 —— 聊天、会话、技能、定时、MCP、配置、KEYS 全部保留。<br>回滚：清空 hermes-skin.css 即恢复面板原版；原生壳把配色常量改回即可。</footer>
+</body></html>

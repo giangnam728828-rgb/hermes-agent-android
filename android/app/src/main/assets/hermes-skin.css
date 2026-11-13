@@ -1,22 +1,44 @@
 /* ============================================================
-   Hermes Agent · Android 工作台皮肤
+   Hermes Agent · Android 工作台皮肤（DSH-Go 浅色原生风）
    只改视觉：CSS 变量 + 通用元素 + 内嵌终端容器。
    不改动任何 DOM 结构、路由、按钮、事件与接口，
    聊天 / 会话 / 技能 / 定时 / MCP / 配置 / KEYS 全部保留。
-   由 ThemeSkin.kt 在页面加载完成后注入 <style id="hermes-android-skin">。
+   由 ThemeSkin.kt 注入 <style id="hermes-android-skin">。
+   配色与原生启动页一致：淡紫蓝底 + 白卡片 + 蓝紫 #5266AF。
    ============================================================ */
 
 :root {
-  /* 从上游 LENS_0（深青 #041c1c + 奶油 #ffe6cb）换成柔和深墨蓝，
-     与 App 启动页的深色体系衔接，弱化「裸终端」的冷硬感。 */
-  --background: #0C0F16 !important;
-  --background-base: #0C0F16 !important;
+  /* 上游 LENS_0 是深青底 + 奶油字，这里整体翻成浅色。
+     --midground 在上游承担「前景文字」角色，故设为深色。 */
+  --background: #F3F5FC !important;
+  --background-base: #F3F5FC !important;
   --background-alpha: 1 !important;
-  --midground: #E9EDF6 !important;
-  --midground-base: #E9EDF6 !important;
+  --midground: #1B2235 !important;
+  --midground-base: #1B2235 !important;
   --midground-alpha: 1 !important;
-  --foreground: #FFFFFF !important;
-  --foreground-base: #FFFFFF !important;
+  --foreground: #1B2235 !important;
+  --foreground-base: #1B2235 !important;
+  --foreground-alpha: 1 !important;
+
+  /* shadcn 兼容 token：直接给字面值，避免上游 color-mix 再算回深色 */
+  --color-card: #FFFFFF !important;
+  --color-card-foreground: #1B2235 !important;
+  --color-primary: #5266AF !important;
+  --color-primary-foreground: #FFFFFF !important;
+  --color-secondary: #EDF1FB !important;
+  --color-secondary-foreground: #1B2235 !important;
+  --color-muted: #F3F5FC !important;
+  --color-muted-foreground: #6B7288 !important;
+  --color-accent: #E4E8F8 !important;
+  --color-accent-foreground: #1B2235 !important;
+  --color-popover: #FFFFFF !important;
+  --color-popover-foreground: #1B2235 !important;
+  --color-border: #E2E7F3 !important;
+  --color-input: #E2E7F3 !important;
+  --color-ring: #5266AF !important;
+  --color-destructive: #D9534F !important;
+  --color-success: #1F9D6B !important;
+  --color-warning: #E08A2B !important;
 
   /* 中文优先字体栈 + 手机上更舒展的排版 */
   --theme-font-sans: system-ui, -apple-system, "PingFang SC", "Noto Sans SC",
@@ -30,65 +52,88 @@
   --theme-spacing-mul: 1.05 !important;
   --theme-density: comfortable !important;
 
-  /* 圆角加大，去掉方方正正的终端窗口感 */
+  /* DSH-Go 的大圆角 */
   --radius: 1rem !important;
   --theme-radius: 1rem !important;
+  --radius-sm: 12px !important;
+  --radius-md: 14px !important;
+  --radius-lg: 18px !important;
+  --radius-xl: 22px !important;
 
-  --series-input-token: #F3C97B !important;
-  --series-output-token: #6EE7B7 !important;
+  --series-input-token: #5266AF !important;
+  --series-output-token: #1F9D6B !important;
 }
 
 html, body, #root {
-  background: #0C0F16 !important;
-  color: #E9EDF6 !important;
+  background: #F3F5FC !important;
+  color: #1B2235 !important;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
+body {
+  background-image: linear-gradient(180deg, #E2E9FB 0%, #F0F3FC 32%, #F8F7FD 100%) !important;
+  background-attachment: fixed !important;
+}
 
-/* 滚动条细一点，别像桌面终端 */
-* { scrollbar-width: thin; }
+/* Tailwind 生成的底色类兜底：白卡片、浅分组 */
+[class*="bg-card"], [class*="bg-popover"] {
+  background-color: #FFFFFF !important;
+  color: #1B2235 !important;
+}
+[class*="bg-muted"], [class*="bg-secondary"], [class*="bg-accent"] {
+  background-color: #EDF1FB !important;
+  color: #1B2235 !important;
+}
+[class*="border-border"], [class*="border-input"] { border-color: #E2E7F3 !important; }
+[class*="text-muted-foreground"] { color: #6B7288 !important; }
+[class*="text-foreground"], [class*="text-card-foreground"] { color: #1B2235 !important; }
+
+/* 滚动条细一点 */
+* { scrollbar-width: thin; scrollbar-color: #C7CFE3 transparent; }
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb {
-  background: rgba(233, 237, 246, 0.18);
-  border-radius: 999px;
-}
+::-webkit-scrollbar-thumb { background: #C7CFE3; border-radius: 999px; }
 
-/* 触控目标：手机上别太小 */
+/* 触控目标 */
 button, [role="button"], a[role="button"],
-input, select, textarea, [role="tab"], [role="menuitem"] {
-  min-height: 40px;
-}
+input, select, textarea, [role="tab"], [role="menuitem"] { min-height: 40px; }
 
-/* 输入框 / 弹层：柔和圆角 */
 input, textarea, select, [role="dialog"], [role="menu"] {
   border-radius: 14px !important;
+  border-color: #E2E7F3 !important;
 }
 input:focus-visible, textarea:focus-visible, select:focus-visible,
 button:focus-visible, [role="button"]:focus-visible {
-  outline: 2px solid #E8B44A !important;
+  outline: 2px solid #5266AF !important;
   outline-offset: 2px;
 }
 
-/* ---- 重点：CHAT 页内嵌的 xterm.js 终端 ----
-   上游把 /chat 做成终端（JetBrains Mono 等宽），这是「像 Open Code」的
-   主要来源。这里只调视觉：留白、圆角、柔和底色、行高，不碰终端行为。 */
-.xterm, .xterm-viewport, .xterm-screen, .xterm-rows {
-  background: #12161F !important;
-}
-.xterm {
-  padding: 12px !important;
-  border-radius: 14px !important;
-  box-shadow: inset 0 0 0 1px rgba(233, 237, 246, 0.08);
-}
-.xterm-viewport { border-radius: 14px !important; }
-.xterm .xterm-rows { line-height: 1.5 !important; }
-code, kbd, pre, samp, .font-mono, .font-mono-ui {
-  font-size: 0.9rem !important;
+/* 主按钮保持蓝紫，避免被上面的白卡片兜底洗掉 */
+button[class*="bg-primary"], [role="button"][class*="bg-primary"],
+[class*="bg-primary"][class*="text-primary-foreground"] {
+  background-color: #5266AF !important;
+  color: #FFFFFF !important;
 }
 
-/* 过渡：切换 / 弹层别太生硬 */
-button, [role="button"], [role="tab"], [role="dialog"] {
+/* ---- CHAT 页内嵌 xterm.js 终端 ----
+   上游把 /chat 做成全屏终端，这是「像 Open Code」的来源。
+   这里把它收成一张柔和的深蓝卡片 + 圆角 + 留白，像代码块而不是黑屏。
+   终端文字由 canvas 绘制，保留深色底以保证可读，不动其行为。 */
+.xterm, .xterm-viewport, .xterm-screen, .xterm-rows {
+  background: #1E2540 !important;
+}
+.xterm {
+  padding: 14px !important;
+  border-radius: 16px !important;
+  box-shadow: inset 0 0 0 1px rgba(82, 102, 175, 0.22);
+}
+.xterm-viewport { border-radius: 16px !important; }
+.xterm .xterm-rows { line-height: 1.55 !important; }
+code, kbd, pre, samp, .font-mono, .font-mono-ui { font-size: 0.9rem !important; }
+
+/* 柔和过渡 */
+button, [role="button"], [role="tab"], [role="dialog"],
+[class*="bg-card"] {
   transition: background-color .16s ease, border-color .16s ease,
               color .16s ease, transform .16s ease;
 }

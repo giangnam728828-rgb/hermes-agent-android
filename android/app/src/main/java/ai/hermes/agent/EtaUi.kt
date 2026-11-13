@@ -21,16 +21,17 @@ import android.widget.TextView
  */
 object EtaUi {
 
-    const val BG = "#0A0A0F"
-    const val CARD = "#14141C"
-    const val FIELD = "#1E1E28"
-    const val TEXT = "#F2F2F5"
-    const val SUB = "#A8A8B4"
-    const val MUTED = "#6C6C78"
-    const val LINE = "#2A2A34"
-    const val ACCENT = "#E8B44A"
-    const val ACCENT_SOFT = "#2A2318"
-    const val CHIP = "#1E1E28"
+    // DSH-Go 风格：浅灰底 + 白色圆角卡片 + 蓝紫强调
+    const val BG = "#EFF2FB"
+    const val CARD = "#FFFFFF"
+    const val FIELD = "#EEF1F9"
+    const val TEXT = "#1B2235"
+    const val SUB = "#5B6273"
+    const val MUTED = "#8B92A6"
+    const val LINE = "#E6EAF4"
+    const val ACCENT = "#5266AF"
+    const val ACCENT_SOFT = "#E4E8F8"
+    const val CHIP = "#EEF1F9"
 
     fun Context.dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 

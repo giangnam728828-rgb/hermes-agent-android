@@ -24,9 +24,9 @@ jobs:
 
       - name: Mount pseudo filesystems
         run: |
+          sudo mkdir -p /tmp/rootfs/proc /tmp/rootfs/dev /tmp/rootfs/sys /tmp/rootfs/tmp
           sudo mount --bind /proc /tmp/rootfs/proc
           sudo mount --bind /dev /tmp/rootfs/dev
-          sudo mkdir -p /tmp/rootfs/sys
           sudo mount --bind /sys /tmp/rootfs/sys
 
       - name: Import smoke test
@@ -63,7 +63,12 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - uses: android-actions/setup-android@v3
+      - name: Configure SDK
+        run: |
+          SDK="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}"
+          echo "sdk.dir=$SDK" > android/local.properties
+          echo "ANDROID_SDK_ROOT=$SDK" >> $GITHUB_ENV
+          ls "$SDK/platforms" | tail -3
 
       - name: Unit tests
         run: |

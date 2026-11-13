@@ -66,7 +66,7 @@ class TodayHome(
     private lateinit var feed: LinearLayout
     private lateinit var inputBar: View
     private lateinit var input: EditText
-    private lateinit var tabBar: LinearLayout
+    private lateinit var tabBar: View
     private val tabItems = mutableListOf<LinearLayout>()
 
     // ---------------------------------------------------------------- 构建

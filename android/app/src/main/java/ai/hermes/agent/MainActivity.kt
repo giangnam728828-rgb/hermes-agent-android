@@ -3,6 +3,8 @@ package ai.hermes.agent
 import android.Manifest
 import android.app.Activity
 import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
@@ -36,6 +38,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import org.json.JSONObject
 import java.io.File
 
 /**
@@ -62,6 +65,9 @@ class MainActivity : Activity() {
     private data class Tab(val label: String, val icon: String, val path: String)
 
     private lateinit var root: FrameLayout
+    private lateinit var webLayer: LinearLayout
+    private lateinit var homeLayer: View
+    private var todayHome: TodayHome? = null
     private lateinit var webHost: FrameLayout
     private lateinit var webView: WebView
     private lateinit var bootOverlay: FrameLayout
@@ -88,6 +94,8 @@ class MainActivity : Activity() {
 
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
     private var importTarget: File? = null
+    private var pendingDraft = ""
+    private var draftTries = 0
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val runtimeListener: () -> Unit = { runOnUiThread { render() } }
@@ -95,8 +103,11 @@ class MainActivity : Activity() {
         override fun run() {
             render()
             tickCount++
-            if (tickCount % 2 == 0 && !bootVisible) syncRouteTabs()
-            mainHandler.postDelayed(this, 1200)
+            // 首页是纯原生 View，没必要每几秒往 WebView 里打一次 JS。
+            if (tickCount % 2 == 0 && !bootVisible &&
+                ::webLayer.isInitialized && webLayer.visibility == View.VISIBLE
+            ) syncRouteTabs()
+            mainHandler.postDelayed(this, 2000)
         }
     }
 
@@ -123,7 +134,9 @@ class MainActivity : Activity() {
         applyImmersive()
         maybeStartRuntime()
         render()
-        if (Runtime.phase == Runtime.Phase.READY) loadWorkspace()
+        // 3.0：WebView 懒加载，只有用户从 Today 首页点进工作台时才载入，
+        // 首屏不再背着一个桌面级 SPA，也不再一启动就吃满内存。
+        todayHome?.onRuntimeChanged()
     }
 
     // ---------------------------------------------------------------- UI 构建
@@ -131,14 +144,16 @@ class MainActivity : Activity() {
     private fun buildUi() {
         root = FrameLayout(this).apply { background = bgGradient() }
 
-        val column = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        column.addView(buildTopBar(), LinearLayout.LayoutParams(
+        // 工作台层（完整上游 SPA + 2.0 修好的文件选择 / 工作区 / 设置），按需显示。
+        webLayer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = View.GONE
+        }
+        webLayer.addView(buildTopBar(), LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(60),
         ))
 
-        webHost = FrameLayout(this).apply {
-            setBackgroundColor(Color.parseColor("#F3F5FC"))
-        }
+        webHost = FrameLayout(this).apply { setBackgroundColor(Color.TRANSPARENT) }
         webView = WebView(this)
         configureWebView()
         webHost.addView(webView, FrameLayout.LayoutParams(
@@ -150,20 +165,103 @@ class MainActivity : Activity() {
             rightMargin = dp(18)
         })
 
-        column.addView(webHost, LinearLayout.LayoutParams(
+        webLayer.addView(webHost, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f,
         ))
-        column.addView(buildTabBar(), LinearLayout.LayoutParams(
+        webLayer.addView(buildTabBar(), LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
         ))
 
-        root.addView(column, FrameLayout.LayoutParams(
+        root.addView(webLayer, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT,
         ))
+
+        // 默认首屏：Today 风格纯原生主屏，不加载 WebView，秒开且不卡。
+        todayHome = TodayHome(this) { path, draft -> openWeb(path, draft) }
+        homeLayer = todayHome!!.build()
+        root.addView(homeLayer, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT,
+        ))
+
         root.addView(buildBootOverlay(), FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT,
         ))
         setContentView(root)
+    }
+
+    /**
+     * 从 Today 首页进入完整工作台。draft 非空时会尽力注入 /chat 的 xterm，
+     * 让首页输入框里打的那句话真的送进 PTY，而不是只有一个假的回显。
+     */
+    internal fun openWeb(path: String, draft: String = "") {
+        if (Runtime.phase != Runtime.Phase.READY || Runtime.port <= 0) {
+            toast("运行环境还在启动，稍等一下")
+            return
+        }
+        pendingDraft = draft
+        draftTries = 0
+        homeLayer.visibility = View.GONE
+        webLayer.visibility = View.VISIBLE
+        val target = if (path.isBlank() || path == "/") {
+            Runtime.workspaceUrl.ifBlank { "http://127.0.0.1:${Runtime.port}/" }
+        } else {
+            "http://127.0.0.1:${Runtime.port}$path"
+        }
+        if (webView.url == null || webView.url != target) webView.loadUrl(target)
+        if (draft.isNotEmpty()) mainHandler.postDelayed({ injectDraft() }, 900)
+    }
+
+    /** 返回 Today 首页，只隐藏工作台层，不销毁 WebView，终端会话不丢。 */
+    internal fun backToHome() {
+        pendingDraft = ""
+        webLayer.visibility = View.GONE
+        homeLayer.visibility = View.VISIBLE
+        todayHome?.onRuntimeChanged()
+    }
+
+    /**
+     * 把首页输入框的内容送进 /chat 内嵌 xterm 的隐藏 textarea，触发 xterm 的
+     * input 采集（onData → PTY WebSocket），等于替用户敲了一次回车。
+     * 页面还没渲染出 xterm 时会重试；实在拿不到就复制到剪贴板兜底。
+     */
+    private fun injectDraft() {
+        val text = pendingDraft
+        if (text.isEmpty() || draftTries > 12 || webLayer.visibility != View.VISIBLE) return
+        draftTries++
+        val q = JSONObject.quote(text)
+        val script = """
+            (function(){
+              var t=document.querySelector('.xterm-helper-textarea');
+              if(!t) return '0';
+              try{
+                t.focus();
+                t.value=$q;
+                t.dispatchEvent(new Event('input',{bubbles:true}));
+                t.value='';
+                setTimeout(function(){
+                  t.value='\\r';
+                  t.dispatchEvent(new Event('input',{bubbles:true}));
+                  t.value='';
+                },160);
+                return '1';
+              }catch(e){ return '0'; }
+            })();
+        """.trimIndent()
+        webView.evaluateJavascript(script) { value ->
+            if (value?.trim('"')?.trim() == "1") {
+                pendingDraft = ""
+                toast("已送进终端")
+            } else if (draftTries <= 12) {
+                mainHandler.postDelayed({ injectDraft() }, 500)
+            } else {
+                pendingDraft = ""
+                runCatching {
+                    val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    cm.setPrimaryClip(ClipData.newPlainText("Hermes", text))
+                }
+                toast("已复制内容，长按终端粘贴即可发送")
+            }
+        }
     }
 
     /** 顶栏：圆形设置键 + 胶囊标题（带状态点/当前工作区）+ 圆形更多键。 */
@@ -173,7 +271,8 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(14), dp(8), dp(14), dp(8))
         }
-        bar.addView(circleButton("☰") { showSettings() })
+        // 工作台层左上角是「回 Today 首页」；设置入口在「⋯」更多里，功能不丢。
+        bar.addView(circleButton("←") { backToHome() })
 
         val pill = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -520,7 +619,8 @@ class MainActivity : Activity() {
     }
 
     private fun maybeHideBoot() {
-        if (!bootVisible || !pageLoaded || Runtime.phase != Runtime.Phase.READY) return
+        // 3.0 首屏是原生 View，不需要等 WebView onPageFinished 才放行。
+        if (!bootVisible || Runtime.phase != Runtime.Phase.READY) return
         bootVisible = false
         bootOverlay.animate().alpha(0f).setDuration(320)
             .withEndAction { bootOverlay.visibility = View.GONE }.start()
@@ -641,7 +741,11 @@ class MainActivity : Activity() {
 
     private fun render() {
         val phase = Runtime.phase
-        if (phase == Runtime.Phase.READY && Runtime.port > 0) loadWorkspace()
+        // 只有在工作台层真正可见时才保活 WebView，首页状态一律不碰它。
+        if (phase == Runtime.Phase.READY && Runtime.port > 0 &&
+            ::webLayer.isInitialized && webLayer.visibility == View.VISIBLE
+        ) loadWorkspace()
+        todayHome?.onRuntimeChanged()
 
         statusDot.background = circle(
             when (phase) {
@@ -713,7 +817,7 @@ class MainActivity : Activity() {
 
     // ------------------------------------------------------------ 工作区管理弹层
 
-    private fun showWorkspaceSheet() {
+    internal fun showWorkspaceSheet() {
         EtaSheet.show(this, "工作区", tall = false) { sheet ->
             sheet.body.addView(TextView(this).apply {
                 text = "工作区是 Agent 读写的真实目录。新建后会自动切到该目录开一个新会话。"
@@ -830,7 +934,7 @@ class MainActivity : Activity() {
         setActiveTab(1)
     }
 
-    private fun pickFilesForWorkspace() {
+    internal fun pickFilesForWorkspace() {
         val target = Workspaces.current(this).ifEmpty { Prefs.workspace(this) }
         val dir = File(target)
         val created = dir.isDirectory || runCatching { dir.mkdirs() }.getOrDefault(false)
@@ -850,7 +954,7 @@ class MainActivity : Activity() {
 
     // ------------------------------------------------------------ 更多 / 设置
 
-    private fun showMore() {
+    internal fun showMore() {
         EtaSheet.show(this, "更多", tall = false) { sheet ->
             sheet.body.addView(actionRow("运行日志") {
                 sheet.dismiss()
@@ -906,7 +1010,7 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun showSettings() {
+    internal fun showSettings() {
         EtaSheet.show(this, getString(R.string.settings_title), tall = true) { sheet ->
             sheet.body.addView(sectionLabel("连接"))
             sheet.body.addView(space(10))
@@ -1106,7 +1210,7 @@ class MainActivity : Activity() {
         setLineSpacing(dp(2).toFloat(), 1f)
     }
 
-    private fun confirmReinstall() {
+    internal fun confirmReinstall() {
         EtaSheet.show(this, "重新安装运行环境", tall = false) { sheet ->
             sheet.body.addView(TextView(this).apply {
                 text = "会清空容器内的 Python 环境和已装的技能，但保留手机存储里的工作目录。" +
@@ -1137,7 +1241,7 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun exportLogs() {
+    internal fun exportLogs() {
         runCatching {
             val file = File(Paths.logsDir(this), "hermes-log-${System.currentTimeMillis()}.txt")
             file.parentFile?.mkdirs()
@@ -1217,8 +1321,12 @@ class MainActivity : Activity() {
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         if (keyCode == KeyEvent.KEYCODE_BACK) {
-            if (webView.canGoBack()) {
-                webView.goBack()
+            if (::webLayer.isInitialized && webLayer.visibility == View.VISIBLE) {
+                if (webView.canGoBack()) {
+                    webView.goBack()
+                } else {
+                    backToHome()
+                }
                 return true
             }
             val now = System.currentTimeMillis()
@@ -1249,12 +1357,16 @@ class MainActivity : Activity() {
             EtaMotion.press(this@MainActivity, this)
         }
 
+    /** 对齐 Today 截图：顶部蓝紫 → 中部近白 → 底部暖米桃，全屏柔和渐变。 */
     private fun bgGradient(): GradientDrawable = GradientDrawable(
         GradientDrawable.Orientation.TOP_BOTTOM,
         intArrayOf(
-            Color.parseColor("#E2E9FB"),
-            Color.parseColor("#F0F3FC"),
-            Color.parseColor("#F8F7FD"),
+            Color.parseColor("#B9CDEA"),
+            Color.parseColor("#DCE8F6"),
+            Color.parseColor("#F3F7FC"),
+            Color.parseColor("#FFFFFF"),
+            Color.parseColor("#F5E9DE"),
+            Color.parseColor("#F8DFBE"),
         ),
     )
 

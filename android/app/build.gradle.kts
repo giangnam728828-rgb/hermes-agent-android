@@ -15,8 +15,8 @@ android {
         targetSdk = 28
         // 覆盖安装三要素：applicationId 不变、签名证书不变、versionCode 只增不减。
         // 2.0 相对 1.0 是升级，旧版数据（面板 localStorage / 工作目录 / 设置）全部保留。
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.3.0"
         ndk {
             abiFilters += listOf("arm64-v8a")
         }

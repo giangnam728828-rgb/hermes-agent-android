@@ -1,197 +1,90 @@
 /* ============================================================
-   Hermes Agent · Android 移动端皮肤 v2
-   目标：把桌面仪表盘收成「手机 App」——原生壳负责顶栏/底栏/悬浮按钮，
-   这一层负责把网页内容变成单栏卡片流，不再出现桌面侧栏和全屏黑终端。
-   只改视觉：CSS 变量 + 布局 + 触控，不删除任何 DOM、不改事件与接口。
-   面板全部页面（会话/聊天/文件/技能/定时/MCP/配置/KEYS…）保持可用。
+   Hermes Agent · 工作台层轻量皮肤 v3
+   3.0 起主屏是 Today 风格原生 View，这一层只在用户点进「完整工作台」
+   时才生效。相比 v2 刻意做减法：删掉所有 [class*=] 属性通配选择器、
+   通配 transition / box-shadow / scrollbar 规则 —— 这些会在 React 频繁
+   重渲染时反复触发全文档样式重算，是卡顿的另一来源。
+   只覆盖 CSS 变量与少量确定选择器，不改 DOM、路由、事件与接口。
    ============================================================ */
 
 :root {
-  /* 上游 LENS_0 是深青底 + 奶油字，整体翻成浅色。
-     --midground 在上游承担「前景文字」角色，故设为深色。 */
   --background: #F3F5FC !important;
   --background-base: #F3F5FC !important;
-  --background-alpha: 1 !important;
   --midground: #1B2235 !important;
-  --midground-base: #1B2235 !important;
-  --midground-alpha: 1 !important;
   --foreground: #1B2235 !important;
-  --foreground-base: #1B2235 !important;
-  --foreground-alpha: 1 !important;
-
-  /* shadcn 兼容 token：给字面值，避免上游 color-mix 再算回深色 */
   --color-card: #FFFFFF !important;
   --color-card-foreground: #1B2235 !important;
   --color-primary: #5266AF !important;
   --color-primary-foreground: #FFFFFF !important;
   --color-secondary: #EDF1FB !important;
-  --color-secondary-foreground: #1B2235 !important;
   --color-muted: #F3F5FC !important;
   --color-muted-foreground: #6B7288 !important;
   --color-accent: #E4E8F8 !important;
-  --color-accent-foreground: #1B2235 !important;
   --color-popover: #FFFFFF !important;
-  --color-popover-foreground: #1B2235 !important;
   --color-border: #E2E7F3 !important;
   --color-input: #E2E7F3 !important;
   --color-ring: #5266AF !important;
-  --color-destructive: #D9534F !important;
-  --color-success: #1F9D6B !important;
-  --color-warning: #E08A2B !important;
-
-  /* 中文优先 + 手机上更舒展的排版 */
   --theme-font-sans: system-ui, -apple-system, "PingFang SC", "Noto Sans SC",
     "Microsoft YaHei", "Segoe UI", Roboto, sans-serif !important;
-  --theme-font-mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo,
-    Consolas, monospace !important;
-  --theme-font-display: var(--theme-font-sans) !important;
   --theme-base-size: 16px !important;
   --theme-line-height: 1.65 !important;
-  --theme-letter-spacing: 0.01em !important;
-  --theme-spacing-mul: 1.05 !important;
-  --theme-density: comfortable !important;
-
-  /* 大圆角 + 柔和阴影，手机卡片观感 */
   --radius: 1rem !important;
   --theme-radius: 1rem !important;
   --radius-sm: 12px !important;
   --radius-md: 16px !important;
   --radius-lg: 20px !important;
   --radius-xl: 26px !important;
-
-  --series-input-token: #5266AF !important;
-  --series-output-token: #1F9D6B !important;
 }
 
 html, body, #root {
   width: 100% !important;
   max-width: 100% !important;
   overflow-x: hidden !important;
-  background: #F3F5FC !important;
   color: #1B2235 !important;
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
   -webkit-tap-highlight-color: transparent;
 }
+
 body {
-  background-image: linear-gradient(180deg, #E2E9FB 0%, #F0F3FC 30%, #F8F7FD 100%) !important;
-  background-attachment: fixed !important;
+  background-color: #F3F5FC !important;
+  background-image: linear-gradient(180deg, #C9D9F1 0%, #EEF3FC 34%, #FFFFFF 62%, #F7EADC 100%) !important;
   padding-bottom: env(safe-area-inset-bottom, 0px) !important;
 }
 
-/* ---------------------------------------------------------------
-   单栏化：桌面侧栏由原生底部 Tab 接管，内容区占满宽度。
-   只隐藏「导航容器」本身，不隐藏页面内容，功能入口仍在。
-   --------------------------------------------------------------- */
+/* 桌面侧栏由工作台层自己的底部 Tab 接管 */
 #app-sidebar,
 [aria-controls="app-sidebar"],
-[data-testid="app-sidebar"] {
+[data-testid="app-sidebar"],
+[class*="sidebar-tooltip"] {
   display: none !important;
 }
+
 main, [data-slot="main"], [role="main"] {
   margin-left: 0 !important;
   padding-left: 0 !important;
   max-width: 100% !important;
   width: 100% !important;
 }
-/* 桌面悬浮提示条在触屏上没有意义，且会挡住内容 */
-[class*="sidebar-tooltip"], [role="tooltip"][data-sidebar-tooltip] {
-  display: none !important;
-}
 
-/* ---------------------------------------------------------------
-   卡片流：白卡片 + 大圆角 + 轻阴影 + 舒适内边距
-   --------------------------------------------------------------- */
-[class*="bg-card"], [class*="bg-popover"],
-[role="dialog"], [role="menu"], [class*="shadow-sm"] {
-  background-color: #FFFFFF !important;
-  color: #1B2235 !important;
-  border-radius: 18px !important;
-  border: 1px solid #E9EDF7 !important;
-  box-shadow: 0 6px 22px rgba(45, 62, 120, 0.07) !important;
-}
-[class*="bg-muted"], [class*="bg-secondary"], [class*="bg-accent"] {
-  background-color: #EDF1FB !important;
-  color: #1B2235 !important;
-}
-[class*="border-border"], [class*="border-input"] { border-color: #E2E7F3 !important; }
-[class*="text-muted-foreground"], [class*="text-text-tertiary"] { color: #6B7288 !important; }
-[class*="text-foreground"], [class*="text-card-foreground"],
-[class*="text-text-secondary"] { color: #1B2235 !important; }
-
-/* 页面主容器留出手机呼吸感 */
-main > div, [role="main"] > div { max-width: 100% !important; }
-h1, h2, h3 { letter-spacing: -0.02em !important; }
-
-/* ---------------------------------------------------------------
-   触控：所有可点元素至少 44dp，输入框字号 >=16px 避免聚焦缩放
-   --------------------------------------------------------------- */
-button, [role="button"], a[role="button"], [role="tab"], [role="menuitem"],
-input, select, textarea, summary, label {
+/* 输入框字号 >=16px，避免 Android WebView 聚焦时自动缩放 */
+input, textarea, select {
+  font-size: 16px !important;
   min-height: 44px;
-  font-size: 16px;
-}
-button, [role="button"], [role="tab"] { cursor: pointer; }
-input, textarea, select, [role="dialog"], [role="menu"] {
   border-radius: 14px !important;
-  border-color: #E2E7F3 !important;
-  background-color: #FFFFFF !important;
-  color: #1B2235 !important;
-  padding-left: 12px !important;
-  padding-right: 12px !important;
 }
-input:focus-visible, textarea:focus-visible, select:focus-visible,
-button:focus-visible, [role="button"]:focus-visible {
-  outline: 2px solid #5266AF !important;
-  outline-offset: 2px;
+button, [role="button"], [role="tab"] {
+  min-height: 44px;
+  cursor: pointer;
 }
 
-/* 主按钮保持蓝紫，避免被白卡片兜底洗掉 */
-button[class*="bg-primary"], [role="button"][class*="bg-primary"],
-[class*="bg-primary"][class*="text-primary-foreground"] {
-  background-color: #5266AF !important;
-  color: #FFFFFF !important;
-  border-radius: 14px !important;
-  border: none !important;
-  box-shadow: 0 6px 16px rgba(82, 102, 175, 0.24) !important;
-}
-
-/* ---------------------------------------------------------------
-   /chat 内嵌 xterm.js 终端：从「全屏黑屏」收成一张深色代码卡片。
-   终端由 canvas 绘制，保留深色底保证可读；行为完全不动。
-   --------------------------------------------------------------- */
-.xterm, .xterm-viewport, .xterm-screen, .xterm-rows {
+/* /chat 的 xterm.js 终端收成圆角卡片，行为完全不动 */
+.xterm, .xterm-viewport {
   background: #1E2540 !important;
 }
 .xterm {
-  padding: 14px !important;
-  border-radius: 18px !important;
-  box-shadow: inset 0 0 0 1px rgba(82, 102, 175, 0.22),
-              0 10px 28px rgba(30, 37, 64, 0.18) !important;
+  padding: 12px !important;
   margin: 8px !important;
+  border-radius: 18px !important;
 }
 .xterm-viewport { border-radius: 18px !important; }
-.xterm .xterm-rows { line-height: 1.55 !important; }
-code, kbd, pre, samp, .font-mono, .font-mono-ui { font-size: 0.9rem !important; }
 
-/* ---------------------------------------------------------------
-   细节：滚动条、选中态、过渡、动效降级
-   --------------------------------------------------------------- */
-* { scrollbar-width: thin; scrollbar-color: #C7CFE3 transparent; }
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #C7CFE3; border-radius: 999px; }
-[class*="overflow-x-auto"], [class*="overflow-auto"] {
-  -webkit-overflow-scrolling: touch;
-}
 ::selection { background: #C9D4F5; color: #1B2235; }
-
-button, [role="button"], [role="tab"], [role="dialog"], [class*="bg-card"] {
-  transition: background-color .16s ease, border-color .16s ease,
-              color .16s ease, transform .16s ease, box-shadow .16s ease;
-}
-button:active, [role="button"]:active { transform: scale(0.975); }
-
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
-}

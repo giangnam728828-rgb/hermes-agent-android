@@ -1,217 +1,244 @@
 <!DOCTYPE html>
-<html lang="zh-CN"><head><meta charset="utf-8">
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Hermes Agent 2.0 · 手机 App 化界面示意</title>
+<title>Hermes Agent 3.0 · Today 风格主屏预览</title>
 <style>
-*{box-sizing:border-box}
-body{margin:0;padding:28px 20px 60px;background:linear-gradient(180deg,#EEF2FC,#F7F8FD);color:#1B2235;
-  font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
-.wrap{max-width:1040px;margin:0 auto}
-h1{font-size:23px;margin:0 0 6px;font-weight:650;letter-spacing:-.02em}
-.sub{color:#6B7288;font-size:13px;line-height:1.8;margin:0 0 24px;max-width:820px}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:26px;align-items:start}
-@media(max-width:860px){.grid{grid-template-columns:1fr}}
-.tag{font-size:11px;letter-spacing:.14em;color:#5266AF;font-weight:600;margin:0 0 10px}
-.phone{width:100%;max-width:340px;margin:0 auto;border-radius:30px;overflow:hidden;height:610px;
-  display:flex;flex-direction:column;box-shadow:0 18px 48px rgba(35,50,100,.16);border:1px solid #E3E8F5;position:relative}
-.status{height:26px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 18px;font-size:10px;font-weight:600}
-/* ---------- 1.0 ---------- */
-.old{background:linear-gradient(180deg,#E2E9FB,#F0F3FC 34%,#F8F7FD)}
-.old .status{background:#E2E9FB;color:#6B7288}
-.old .body{padding:16px 18px;flex:1;overflow:auto}
-.old .topbar{display:flex;align-items:center;gap:10px;margin-bottom:26px}
-.circ{width:40px;height:40px;flex:none;border-radius:50%;background:#fff;display:flex;align-items:center;
-  justify-content:center;font-size:16px;box-shadow:0 3px 10px rgba(27,34,53,.08)}
-.old .pill{flex:1;background:#fff;border-radius:22px;padding:7px 12px;text-align:center;box-shadow:0 3px 10px rgba(27,34,53,.08)}
-.old .pill b{display:block;font-size:13px}
-.old .pill span{display:block;font-size:9.5px;color:#1F9D6B}
-.old .brand{font-size:26px;font-weight:600;letter-spacing:-.02em}
-.old .desc{font-size:12px;color:#6B7288;margin-top:5px}
-.card{background:#fff;border-radius:20px;padding:16px;box-shadow:0 4px 16px rgba(27,34,53,.06);margin-bottom:12px}
-.card .h{font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px}
-.dot{width:8px;height:8px;border-radius:50%;background:#1F9D6B;display:inline-block}
-.card .d{font-size:12px;color:#6B7288;margin-top:7px;line-height:1.6}
-.bigbtn{background:#5266AF;color:#fff;border-radius:16px;padding:14px;text-align:center;font-size:14.5px;font-weight:600;margin:0 0 10px}
-.third{display:flex;gap:8px}.third div{flex:1;background:#fff;border-radius:13px;padding:11px;text-align:center;font-size:12px}
-.old .foot{font-size:10px;color:#9AA2B6;text-align:center;margin-top:16px}
-/* ---------- 2.0 ---------- */
-.new{background:linear-gradient(180deg,#E2E9FB 0%,#F0F3FC 30%,#F8F7FD 100%)}
-.new .status{background:#E2E9FB;color:#6B7288}
-.new .topbar{flex:none;display:flex;align-items:center;gap:10px;padding:8px 12px}
-.new .pill{flex:1;background:#fff;border-radius:22px;padding:5px 10px;text-align:center;box-shadow:0 3px 10px rgba(27,34,53,.08)}
-.new .pill b{display:block;font-size:12.5px;line-height:1.3}
-.new .pill span{display:block;font-size:9.5px;color:#6B7288;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.web{flex:1;background:#F3F5FC;overflow:auto;padding:12px 12px 70px;position:relative}
-.page{display:none}.page.on{display:block}
-.ptitle{font-size:11px;letter-spacing:.14em;color:#5266AF;font-weight:600;margin:2px 4px 10px}
-.item{background:#fff;border:1px solid #E9EDF7;border-radius:16px;padding:13px 14px;margin-bottom:9px;
-  box-shadow:0 5px 18px rgba(45,62,120,.06);display:flex;align-items:center;gap:11px}
-.item .ic{width:34px;height:34px;flex:none;border-radius:12px;background:#E4E8F8;color:#5266AF;
-  display:flex;align-items:center;justify-content:center;font-size:15px}
-.item .tx{flex:1;min-width:0}
-.item .tx b{display:block;font-size:12.5px;font-weight:600}
-.item .tx small{display:block;font-size:10.5px;color:#8B92A6;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.item .arrow{color:#B9C1D4;font-size:16px}
-.term{background:#1E2540;border-radius:18px;padding:14px;color:#C9D4F5;font-family:ui-monospace,Menlo,monospace;
-  font-size:11px;line-height:1.7;box-shadow:inset 0 0 0 1px rgba(82,102,175,.22),0 10px 24px rgba(30,37,64,.18)}
-.term .g{color:#7FD6A8}.term .b{color:#8FB0FF}.term .w{color:#E8ECFA}
-.fab{position:absolute;right:16px;bottom:76px;width:54px;height:54px;border-radius:27px;background:#5266AF;color:#fff;
-  display:flex;align-items:center;justify-content:center;font-size:27px;font-weight:300;
-  box-shadow:0 10px 22px rgba(82,102,175,.4);cursor:pointer;user-select:none;z-index:5}
-.tabs{flex:none;display:flex;background:#fff;padding:8px 4px 10px;box-shadow:0 -4px 18px rgba(27,34,53,.06)}
-.tabs div{flex:1;text-align:center;cursor:pointer;color:#8B92A6;font-size:10px;line-height:1.35}
-.tabs div i{display:block;font-style:normal;font-size:18px;margin-bottom:1px}
-.tabs div.on{color:#5266AF;font-weight:600}
-/* 工作区弹层 */
-.sheet{position:absolute;left:0;right:0;bottom:0;background:#fff;border-radius:24px 24px 0 0;
-  padding:12px 18px 18px;box-shadow:0 -12px 32px rgba(27,34,53,.18);z-index:9;display:none}
-.sheet.on{display:block}
-.grab{width:38px;height:4px;background:#D7DBE2;border-radius:3px;margin:0 auto 12px}
-.sheet h3{margin:0 0 4px;font-size:16px;text-align:center}
-.sheet p{margin:0 0 12px;font-size:11px;color:#8B92A6;text-align:center;line-height:1.6}
-.slabel{font-size:10px;letter-spacing:.16em;color:#5266AF;font-weight:600;margin:12px 0 6px}
-.srow{background:#F3F5FC;border-radius:12px;padding:11px 13px;font-size:12px;margin-bottom:7px;display:flex;justify-content:space-between}
-.sin{width:100%;border:1px solid #E2E7F3;background:#F7F9FD;border-radius:12px;padding:11px 12px;font-size:12px;outline:none}
-.sbtns{display:flex;gap:8px;margin-top:14px}
-.sbtns div{flex:1;text-align:center;padding:11px;border-radius:14px;font-size:12.5px;font-weight:600}
-.sbtns .cancel{background:#EEF1F9;color:#1B2235}.sbtns .ok{background:#5266AF;color:#fff}
-.mask{position:absolute;inset:0;background:rgba(20,28,50,.35);z-index:8;display:none}
-.mask.on{display:block}
-/* ---------- 对比表 ---------- */
-table{width:100%;border-collapse:collapse;margin-top:34px;background:#fff;border-radius:18px;overflow:hidden;
-  box-shadow:0 6px 22px rgba(45,62,120,.07);font-size:13px}
-th,td{padding:13px 16px;text-align:left;border-bottom:1px solid #EDF0F7;vertical-align:top;line-height:1.6}
-th{background:#F5F7FD;color:#5266AF;font-size:11px;letter-spacing:.1em;font-weight:600}
-tr:last-child td{border-bottom:0}
-td:first-child{font-weight:600;white-space:nowrap;color:#1B2235}
-.bad{color:#D9534F}.good{color:#1F9D6B}
-.foot{margin-top:22px;font-size:12px;color:#6B7288;line-height:1.9}
-code{background:#EEF1F9;padding:2px 6px;border-radius:6px;font-size:11.5px}
-</style></head>
-<body><div class="wrap">
-<h1>Hermes Agent 2.0 · 打开就是 App</h1>
-<p class="sub">左右对比：1.0 是「启动页 + 点按钮进工作台」，2.0 是打开直接落在面板里，
-带原生顶栏、底部 Tab 和悬浮「+」。点右边手机的 Tab 和「+」可以试交互（示意，非真实面板）。</p>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;padding:26px 18px 60px;color:#1B2235;
+  font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+  background:linear-gradient(160deg,#EEF3FC,#F8F5F0)}
+.wrap{max-width:1080px;margin:0 auto}
+h1{font-size:23px;margin:0 0 6px;letter-spacing:-.02em}
+.sub{color:#6B7288;font-size:13px;line-height:1.85;margin:0 0 22px;max-width:860px}
+.grid{display:grid;grid-template-columns:1fr 400px;gap:28px;align-items:start}
+@media(max-width:900px){.grid{grid-template-columns:1fr}}
+.info{background:#fff;border-radius:22px;padding:22px 24px;box-shadow:0 8px 28px rgba(35,50,100,.07)}
+.info h2{font-size:15px;margin:0 0 10px}
+.info h2:not(:first-child){margin-top:24px}
+.info p,.info li{font-size:13px;line-height:1.9;color:#4A5266}
+.info ul{padding-left:18px;margin:6px 0}
+.info .k{color:#5266AF;font-weight:600}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.chip{background:#F1F4FA;border-radius:999px;padding:6px 12px;font-size:11.5px;color:#5266AF}
 
-<div class="grid">
-  <div>
-    <div class="tag">1.0 · 之前</div>
-    <div class="phone old">
-      <div class="status"><span>9:41</span><span>●●● ▮</span></div>
-      <div class="body">
-        <div class="topbar">
-          <div class="circ">☰</div><div class="pill"><b>Hermes Agent</b><span>● 本机 · workspace</span></div><div class="circ">✎</div>
-        </div>
-        <div class="brand">Hermes Agent</div>
-        <div class="desc">会自己长出技能的智能体 · 手机上直接跑</div>
-        <div style="height:22px"></div>
-        <div class="card"><div class="h"><span class="dot"></span>运行中</div>
-          <div class="d">Hermes 面板已就绪（端口 9119）</div>
-          <div style="margin-top:10px"><span style="background:#EEF1F9;border-radius:8px;padding:3px 9px;font-size:10.5px;color:#5266AF">127.0.0.1:9119</span></div>
-        </div>
-        <div class="bigbtn">进入工作台 ← 还要点一下</div>
-        <div class="third"><div>⚙ 设置</div><div>▤ 日志</div><div>↻ 重启</div></div>
-        <div class="sec" style="font-size:10.5px;letter-spacing:.18em;color:#5266AF;margin:18px 0 8px 4px">运行日志 ›</div>
-        <div class="foot">上传点不动 · 建不了工作区 · 像 Open Code</div>
+/* ---------- 手机 ---------- */
+.phone{width:360px;max-width:100%;margin:0 auto;height:720px;border-radius:36px;overflow:hidden;
+  display:flex;flex-direction:column;position:relative;border:1px solid #E3E8F5;
+  box-shadow:0 22px 56px rgba(35,50,100,.18);
+  background:linear-gradient(180deg,#B9CDEA 0%,#DCE8F6 16%,#F3F7FC 38%,#FFFFFF 56%,#F5E9DE 82%,#F8DFBE 100%)}
+.status{height:28px;flex:none;display:flex;align-items:center;justify-content:space-between;
+  padding:0 20px;font-size:10px;font-weight:600;color:#33405E}
+.top{height:62px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 18px;position:relative}
+.rbtn{width:42px;height:42px;border-radius:50%;background:rgba(255,255,255,.82);
+  display:flex;align-items:center;justify-content:center;font-size:17px;cursor:pointer;
+  box-shadow:0 3px 12px rgba(27,34,53,.08)}
+.avatar{width:52px;height:52px;border-radius:50%;position:absolute;left:50%;top:4px;transform:translateX(-50%);
+  background:linear-gradient(135deg,#8E7BC7,#C58FB0);color:#fff;display:flex;align-items:center;
+  justify-content:center;font-size:19px;box-shadow:0 4px 14px rgba(90,70,140,.24);cursor:pointer}
+.screen{flex:1;overflow-y:auto;padding:4px 18px 16px;scrollbar-width:none}
+.screen::-webkit-scrollbar{display:none}
+.brief{display:inline-flex;align-items:center;background:#fff;border-radius:21px;padding:9px 16px;
+  font-size:12.5px;cursor:pointer;box-shadow:0 3px 12px rgba(27,34,53,.07);margin-bottom:14px}
+.time{text-align:center;font-size:11px;color:#A6ACBA;margin:4px 0 14px}
+.bubble{background:#fff;border-radius:22px;padding:17px 18px;margin-bottom:13px;
+  box-shadow:0 3px 14px rgba(27,34,53,.055);cursor:pointer}
+.bubble b{display:block;font-size:15px;margin-bottom:7px}
+.bubble p{font-size:13.5px;line-height:1.8;margin:0;color:#333C50}
+.bubble span{display:block;font-size:11px;color:#A6ACBA;margin-top:11px}
+.mine{background:#DCE7F8;border-radius:20px;padding:12px 16px;font-size:13.5px;line-height:1.7;
+  margin:0 0 14px auto;max-width:80%;width:fit-content}
+.note{text-align:center;font-size:10.5px;color:#A6ACBA;margin-top:6px}
+.sparkle{position:absolute;right:20px;bottom:132px;background:rgba(255,255,255,.9);
+  border-radius:21px;padding:9px 15px;font-size:12.5px;cursor:pointer;
+  box-shadow:0 4px 14px rgba(27,34,53,.09)}
+.inputbar{flex:none;margin:0 16px 8px;background:rgba(255,255,255,.9);border-radius:27px;
+  height:52px;display:flex;align-items:center;padding:0 8px;gap:6px;
+  box-shadow:0 3px 14px rgba(27,34,53,.07)}
+.inputbar .c{width:38px;height:38px;border-radius:50%;background:#F1F4FA;display:flex;
+  align-items:center;justify-content:center;font-size:20px;cursor:pointer;flex:none}
+.inputbar .c.send{background:#111318;color:#fff;font-size:16px}
+.inputbar input{flex:1;border:0;outline:0;background:transparent;font-size:14px;color:#1B2235;padding:0 6px}
+.inputbar input::placeholder{color:#8B92A6}
+.tabs{flex:none;margin:0 12px 12px;background:rgba(255,255,255,.78);border-radius:30px;
+  display:flex;padding:7px 6px;box-shadow:0 3px 14px rgba(27,34,53,.06)}
+.tab{flex:1;text-align:center;padding:4px 0 3px;border-radius:22px;cursor:pointer;font-size:10.5px;color:#8B92A6}
+.tab i{display:block;font-style:normal;font-size:16px;margin-bottom:2px}
+.tab.on{background:#DDE5F2;color:#1B2235;font-weight:600}
+
+.ptitle{font-size:25px;font-weight:650;margin:6px 0 2px}
+.psub{font-size:12px;color:#8B92A6;margin:0 0 16px}
+.card{background:#fff;border-radius:22px;padding:18px;margin-bottom:13px;
+  box-shadow:0 3px 14px rgba(27,34,53,.055)}
+.card h3{font-size:15px;margin:0 0 6px}
+.card p{font-size:12px;color:#8B92A6;line-height:1.7;margin:0}
+.row{display:flex;justify-content:space-between;align-items:center;padding:12px 0;font-size:13.5px;
+  border-bottom:1px solid #EEF1F7;cursor:pointer}
+.row:last-child{border-bottom:0}
+.row span{color:#8B92A6;font-size:11.5px}
+.black{background:#111318;color:#fff;border-radius:22px;text-align:center;padding:11px;
+  font-size:13px;cursor:pointer;margin-top:12px}
+.sec{font-size:12px;color:#A6ACBA;padding:12px 4px 10px}
+.pro{border-radius:22px;padding:18px;margin-bottom:13px;
+  background:linear-gradient(135deg,#DFEAFB,#FCE9DA)}
+.pro b{font-size:16px}
+.pro p{font-size:11.5px;color:#6B7288;margin:6px 0 14px}
+.pro em{font-style:normal;background:rgba(255,255,255,.75);border-radius:12px;padding:4px 12px;font-size:11.5px}
+.track{height:7px;border-radius:4px;background:#E7EBF3;margin-top:12px;overflow:hidden}
+.track i{display:block;height:100%;width:35%;background:#1B2235;border-radius:4px}
+.quick{display:flex;gap:8px;margin-top:12px}
+.quick div{flex:1;background:#F1F4FA;border-radius:16px;padding:12px 6px;text-align:center;
+  font-size:11.5px;cursor:pointer}
+.toast{position:absolute;left:50%;bottom:150px;transform:translateX(-50%);
+  background:rgba(17,19,24,.86);color:#fff;border-radius:20px;padding:9px 16px;font-size:11.5px;
+  opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>3.0 · Today 风格主屏</h1>
+  <p class="sub">主屏已换成纯原生 View，不再是「桌面网页套个原生壳」。下面这台手机可以点：底部 5 个 Tab、左上设置 / 中间头像 / 右上搜索、气泡卡、灵感胶囊、输入框发送。真机里点气泡会进面板对应页面，输入会送进 /chat 的终端。</p>
+
+  <div class="grid">
+    <div class="info">
+      <h2>这轮到底改了什么</h2>
+      <ul>
+        <li><span class="k">首屏换成原生 View</span>：渐变背景、圆形悬浮按钮 + 居中头像、白色聊天气泡流、胶囊输入栏、胶囊底部 Tab、卡片式设置页。完整 SPA 退到按需加载的工作台层。</li>
+        <li><span class="k">不卡</span>：删掉每 2 秒遍历 View 树 + 注入 JS 的轮询；CSS 清掉几十条 <code>[class*=]</code> 通配选择器与通配动效；ticker 降到 2 秒且首页不执行 JS；首屏完全不加载 WebView。</li>
+        <li><span class="k">不是空壳</span>：气泡与列表来自本机 <code>/api/status</code>、<code>/api/sessions</code>；所有卡片都是真入口（面板真实路由或原生能力）。</li>
+        <li><span class="k">输入真能用</span>：回车后回显气泡，并把文字注入 /chat 的 xterm，触发 PTY；失败兜底复制到剪贴板。</li>
+      </ul>
+
+      <h2>截图取色</h2>
+      <div class="chips">
+        <span class="chip">顶部 #B9CDEA</span><span class="chip">中部 #FFFFFF</span>
+        <span class="chip">底部 #F8DFBE</span><span class="chip">卡片 #FFFFFF / 22dp</span>
+        <span class="chip">文字 #1B2235</span><span class="chip">次文字 #8B92A6</span>
+        <span class="chip">黑按钮 #111318</span>
       </div>
+
+      <h2>功能没有少</h2>
+      <p>2.0 修好的文件选择、多选上传、下载落盘、原生工作区管理，以及端口 / 工作目录 / 局域网 / 全自主 / 保持唤醒 / 日志 / 导出 / 重装 / 重启，全部保留在工作台层。工作台左上「←」回首页，返回首页不销毁 WebView，终端会话不丢。</p>
+
+      <h2>如实说明</h2>
+      <p>/chat 仍是上游内嵌的 TUI 终端。主屏做成 Today 的气泡流、输入也能送进终端，但终端回复不会变成气泡 —— 那要替换上游前端组件与 PTY 交互，会动到功能代码，这版没碰。</p>
     </div>
-  </div>
 
-  <div>
-    <div class="tag">2.0 · 现在</div>
-    <div class="phone new">
-      <div class="status"><span>9:41</span><span>●●● ▮</span></div>
-      <div class="topbar">
-        <div class="circ">☰</div>
-        <div class="pill"><b>Hermes Agent</b><span>● 本机 · 我的项目</span></div>
-        <div class="circ">⋯</div>
-      </div>
-      <div class="web" id="web">
-        <div class="page on" data-p="0">
-          <div class="ptitle">会话</div>
-          <div class="item"><div class="ic">▸</div><div class="tx"><b>重构登录模块</b><small>我的项目 · 2 分钟前 · 12 条消息</small></div><div class="arrow">›</div></div>
-          <div class="item"><div class="ic">▸</div><div class="tx"><b>写一份接口文档</b><small>默认工作区 · 昨天 · 34 条消息</small></div><div class="arrow">›</div></div>
-          <div class="item"><div class="ic">▸</div><div class="tx"><b>排查构建失败</b><small>demo · 3 天前 · 8 条消息</small></div><div class="arrow">›</div></div>
-          <div class="ptitle" style="margin-top:16px">最近文件</div>
-          <div class="item"><div class="ic">▤</div><div class="tx"><b>README.md</b><small>我的项目 · 4.2 KB</small></div><div class="arrow">›</div></div>
+    <div>
+      <div class="phone">
+        <div class="status"><span>23:11</span><span>5G ▮▮▮ &nbsp; ◔</span></div>
+        <div class="top">
+          <div class="rbtn" onclick="toast('打开原生设置')">⚙</div>
+          <div class="avatar" onclick="toast('小芽 · 本机 Hermes')">芽</div>
+          <div class="rbtn" onclick="toast('刷新本机数据')">⌕</div>
         </div>
-        <div class="page" data-p="1">
-          <div class="ptitle">终端 · 我的项目</div>
-          <div class="term"><span class="g">hermes</span> <span class="w">~/我的项目 $</span> <span class="b">分析一下这个目录</span><br>
-          <span class="w">▸ 扫描 12 个文件…</span><br><span class="w">▸ 发现 3 个待办…</span><br>
-          <span class="g">✓</span> <span class="w">完成，结果已写入 notes.md</span><br>
-          <span class="g">hermes</span> <span class="w">~/我的项目 $</span> <span class="b">▌</span></div>
-          <div class="item" style="margin-top:12px"><div class="ic">＋</div><div class="tx"><b>新建会话</b><small>在当前工作区再开一个</small></div><div class="arrow">›</div></div>
+        <div class="screen" id="screen"></div>
+        <div class="sparkle" onclick="send('给我三条今天值得留意的事，简短一点')">✨ 灵感</div>
+        <div class="toast" id="toast"></div>
+        <div class="inputbar" id="inputbar">
+          <div class="c" onclick="toast('新建 / 切换工作区、导入文件')">+</div>
+          <input id="box" placeholder="点击输入或按住说话…" onkeydown="if(event.key==='Enter')send(this.value)">
+          <div class="c send" onclick="send(document.getElementById('box').value)">↑</div>
         </div>
-        <div class="page" data-p="2">
-          <div class="ptitle">文件 · 我的项目</div>
-          <div class="item"><div class="ic">⬆</div><div class="tx"><b>Upload（现在能用了）</b><small>点这里弹出系统文件选择器</small></div><div class="arrow">›</div></div>
-          <div class="item"><div class="ic">▤</div><div class="tx"><b>README.md</b><small>4.2 KB · 刚刚</small></div><div class="arrow">›</div></div>
-          <div class="item"><div class="ic">▤</div><div class="tx"><b>notes.md</b><small>1.8 KB</small></div><div class="arrow">›</div></div>
-        </div>
-        <div class="page" data-p="3">
-          <div class="ptitle">技能</div>
-          <div class="item"><div class="ic">✦</div><div class="tx"><b>代码审查</b><small>已启用</small></div><div class="arrow">›</div></div>
-          <div class="item"><div class="ic">✦</div><div class="tx"><b>文档生成</b><small>已启用</small></div><div class="arrow">›</div></div>
-        </div>
-      </div>
-      <div class="fab" id="fab">+</div>
-      <div class="mask" id="mask"></div>
-      <div class="sheet" id="sheet">
-        <div class="grab"></div><h3>工作区</h3>
-        <p>新建后自动切到该目录开一个新会话</p>
-        <div class="slabel">当前</div><div class="srow"><span>我的项目</span><span style="color:#1F9D6B">● 使用中</span></div>
-        <div class="slabel">已创建 (2)</div>
-        <div class="srow"><span>我的项目</span><span style="color:#8B92A6">切换 ›</span></div>
-        <div class="srow"><span>demo</span><span style="color:#8B92A6">切换 ›</span></div>
-        <div class="slabel">新建</div><input class="sin" placeholder="例如：我的项目 / demo / 工作">
-        <div class="slabel">快捷操作</div>
-        <div class="srow"><span>上传文件到当前工作区</span><span style="color:#5266AF">›</span></div>
-        <div class="srow"><span>打开终端 / 新建会话</span><span style="color:#5266AF">›</span></div>
-        <div class="sbtns"><div class="cancel">取消</div><div class="ok">新建并进入</div></div>
-      </div>
-      <div class="tabs" id="tabs">
-        <div class="on" data-i="0"><i>☰</i>会话</div>
-        <div data-i="1"><i>▸</i>终端</div>
-        <div data-i="2"><i>▤</i>文件</div>
-        <div data-i="3"><i>✦</i>技能</div>
-        <div data-i="4"><i>⚙</i>设置</div>
+        <div class="tabs" id="tabs"></div>
       </div>
     </div>
   </div>
 </div>
 
-<table>
-  <tr><th style="width:130px">问题</th><th>1.0</th><th>2.0</th></tr>
-  <tr><td>进入工作台</td><td class="bad">要先点「进入工作台」按钮</td><td class="good">打开即直达，启动遮罩自动淡出，无需点击</td></tr>
-  <tr><td>上传按钮</td><td class="bad">点了静默无反应（缺 onShowFileChooser）</td><td class="good">弹系统文件选择器，支持多选 / 取消 / 下载落盘</td></tr>
-  <tr><td>新建工作区</td><td class="bad">桌面端数据源为空，路径不存在直接 400</td><td class="good">原生建真实目录 → 写面板存储 → 跳 /chat 开会话</td></tr>
-  <tr><td>界面形态</td><td class="bad">桌面侧栏 + 全屏黑终端，像 Open Code</td><td class="good">顶栏 + 5 个底部 Tab + 悬浮按钮 + 单栏卡片流</td></tr>
-  <tr><td>切页方式</td><td class="bad">没有导航，只能在网页里翻菜单</td><td class="good">SPA 原生路由，不重载、不白屏、终端会话不丢</td></tr>
-  <tr><td>覆盖安装</td><td>—</td><td class="good">同证书 + versionCode 2，直接装，数据不丢</td></tr>
-  <tr><td>功能完整性</td><td>WebView 承载上游完整面板</td><td class="good">不变；只补 WebView 能力与视觉导航，不碰 API / DOM / 路由</td></tr>
-</table>
-
-<p class="foot">
-说明：这是静态示意页，用来看布局与交互意图，不是真实面板截图。真机效果以 APK 为准。<br>
-代码位置：<code>MainActivity.kt</code>（单页壳）、<code>Workspaces.kt</code>（工作区）、
-<code>WebBridge.kt</code> + <code>hermes-bridge.js</code>（桥接）、<code>hermes-skin.css</code>（单栏卡片流）。<br>
-验收项见 <code>docs/真机验收清单.md</code>，改动说明见 <code>docs/界面优化说明.md</code>。
-</p>
-</div>
 <script>
-var tabs=document.querySelectorAll('#tabs div');
-tabs.forEach(function(t){t.addEventListener('click',function(){
-  var i=+t.dataset.i;
-  tabs.forEach(function(x){x.classList.toggle('on',x===t)});
-  document.querySelectorAll('.page').forEach(function(p){p.classList.toggle('on',+p.dataset.p===i)});
-  if(i===4){openSheet();return;}
-});});
-function openSheet(){document.getElementById('sheet').classList.add('on');document.getElementById('mask').classList.add('on')}
-function closeSheet(){document.getElementById('sheet').classList.remove('on');document.getElementById('mask').classList.remove('on')}
-document.getElementById('fab').addEventListener('click',openSheet);
-document.getElementById('mask').addEventListener('click',closeSheet);
-document.querySelector('.sbtns .cancel').addEventListener('click',closeSheet);
-document.querySelector('.sbtns .ok').addEventListener('click',closeSheet);
+var labels=['聊天','Today','任务','记忆','我'];
+var icons=['💬','📅','✅','✨','👤'];
+var tab=0, mine=[];
+
+var bubbles=[
+  ['早间简报 · 11月13日','提一个周六可以留意的活动：11 月 14 日在台北世贸一馆有一场数字游戏主题论坛，全程免费入场，上午讲游戏团队怎么跟投资人对话，下午谈 AI 时代的开发流程与原创性怎么守住。','今天 12:15 · 点击查看会话'],
+  ['整理工作区','这台手机上已有 3 个工作区，最近一次会话停在「模型配置」上。点开可以继续这轮对话，完整终端与工具都在工作台里。','共 24 条消息 · DeepSeek V4.1 Flash'],
+  ['用量小结','本月已用 7% token，模型响应正常。需要重置用量或切换模型，可以到「我 → 模型 / 用量」。','本机 Hermes · 数据只留在这台手机']
+];
+
+function toast(t){
+  var e=document.getElementById('toast');
+  e.textContent=t;e.classList.add('show');
+  clearTimeout(window._tt);window._tt=setTimeout(function(){e.classList.remove('show')},1600);
+}
+function esc(s){return s.replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+
+function pageChat(){
+  var h='<div class="brief" onclick="toast(\'进入 /sessions\')">📄 &nbsp;早间简报 · 11月13日 &nbsp;›</div>'
+       +'<div class="time">今天 12:15</div>';
+  bubbles.forEach(function(b){
+    h+='<div class="bubble" onclick="toast(\'进入 /sessions\')"><b>'+b[0]+'</b><p>'+b[1]+'</p><span>'+b[2]+'</span></div>';
+  });
+  mine.forEach(function(t){h+='<div class="mine">'+esc(t)+'</div>'});
+  h+='<div class="note">数据源：本机 Hermes 面板 · 点任意卡片进入完整工作台</div>';
+  return h;
+}
+function pageToday(){
+  return '<div class="ptitle">Today</div><div class="psub">2026年11月13日 星期五 · 工作台已就绪</div>'
+   +'<div class="card"><h3>早间简报</h3><p>本机模型：DeepSeek V4.1 Flash<br>运行状态：工作台已就绪</p>'
+   +'<div class="black" onclick="toast(\'进入 /sessions\')">打开会话列表</div></div>'
+   +'<div class="card"><h3>用量</h3><p>按会话统计 token、成本与调用次数</p><div class="track"><i></i></div>'
+   +'<div class="row" onclick="toast(\'进入 /analytics\')">查看完整统计 <span>›</span></div></div>'
+   +'<div class="card"><h3>快捷开始</h3><p>这些按钮都直接落到面板的真实功能</p><div class="quick">'
+   +'<div onclick="toast(\'新建工作区\')">新建工作区</div><div onclick="toast(\'导入文件\')">导入文件</div>'
+   +'<div onclick="toast(\'进入 /chat\')">打开终端</div></div></div>'
+   +'<div class="card"><h3>✨ 灵感</h3><p>点一条就直接送进终端开聊</p>'
+   +'<div class="row" onclick="toast(\'已送进终端\')">帮我整理一下这台手机上的工作区 <span>›</span></div>'
+   +'<div class="row" onclick="toast(\'已送进终端\')">看看最近有哪些会话值得继续 <span>›</span></div></div>';
+}
+function pageTasks(){
+  return '<div class="ptitle">任务</div><div class="psub">本机会话 · 共 3 条</div>'
+   +'<div class="card"><h3>开始一轮新对话</h3><p>进入终端 /chat，工具与技能全部可用</p>'
+   +'<div class="black" onclick="toast(\'进入 /chat\')">新建会话</div></div>'
+   +bubbles.map(function(b){return '<div class="card"><h3>'+b[0]+'</h3><p>'+b[2]+'</p>'
+     +'<div class="row" onclick="toast(\'进入 /sessions\')">继续这轮对话 <span>›</span></div></div>'}).join('');
+}
+function pageMemory(){
+  var a=[['技能','/skills'],['MCP 服务','/mcp'],['插件','/plugins'],['模型','/models'],['环境变量与 KEYS','/env'],['定时任务','/cron']];
+  var b=[['配置','/config'],['配置档','/profiles'],['通道与设备','/channels'],['Webhooks','/webhooks'],['运行日志','/logs'],['系统状态','/system']];
+  var rows=function(list){return list.map(function(x){return '<div class="row" onclick="toast(\'进入 '+x[1]+'\')">'+x[0]+' <span>›</span></div>'}).join('')};
+  return '<div class="ptitle">记忆</div><div class="psub">技能、模型、连接与配置</div>'
+   +'<div class="sec">能力</div><div class="card">'+rows(a)+'</div>'
+   +'<div class="sec">配置与连接</div><div class="card">'+rows(b)+'</div>';
+}
+function pageMe(){
+  var rows=[['模型','DeepSeek V4.1 Flash','/models'],['用量','查看统计与重置','/analytics'],
+    ['连接应用','让 Hermes 获取信息、执行操作','/config'],['连接设备与文件','','/files'],
+    ['技能','','/skills'],['记忆与配置档','','/profiles'],['定时任务','','/cron'],
+    ['端口与工作区','9119 · 点击调整','设置'],['运行日志','查看 / 导出','日志'],
+    ['导出日志','保存到手机存储','导出'],['重新安装运行环境','出问题时用','重装']];
+  return '<div style="display:flex;align-items:center;gap:12px;margin:4px 0 14px">'
+   +'<span style="font-size:22px;cursor:pointer" onclick="go(0)">←</span><b style="font-size:25px">设置</b></div>'
+   +'<div class="pro"><b>✦ &nbsp;Hermes</b><p>本机运行 · 数据只留在这台手机</p><em>Pro</em></div>'
+   +'<div class="card"><h3>模型</h3><div class="track"><i></i></div>'
+   +'<div class="black" onclick="toast(\'重启本地服务\')">立即重置本地服务</div></div>'
+   +'<div class="sec">能力与连接</div><div class="card">'
+   +rows.slice(0,7).map(function(r){return '<div class="row" onclick="toast(\''+r[2]+'\')">'+r[0]+' <span>'+(r[1]||'›')+'</span></div>'}).join('')+'</div>'
+   +'<div class="sec">本机与维护</div><div class="card">'
+   +rows.slice(7).map(function(r){return '<div class="row" onclick="toast(\''+r[2]+'\')">'+r[0]+' <span>'+(r[1]||'›')+'</span></div>'}).join('')+'</div>'
+   +'<div class="card"><h3>完整工作台</h3><p>上游面板的全部页面，功能一个不少</p>'
+   +'<div class="black" onclick="toast(\'进入工作台\')">进入工作台</div></div>';
+}
+function render(){
+  var pages=[pageChat,pageToday,pageTasks,pageMemory,pageMe];
+  document.getElementById('screen').innerHTML=pages[tab]();
+  document.getElementById('tabs').innerHTML=labels.map(function(l,i){
+    return '<div class="tab '+(i===tab?'on':'')+'" onclick="go('+i+')"><i>'+icons[i]+'</i>'+l+'</div>';
+  }).join('');
+  document.getElementById('inputbar').style.display=(tab===0)?'flex':'none';
+  document.querySelector('.sparkle').style.display=(tab===0)?'block':'none';
+}
+function go(i){tab=i;render()}
+function send(t){
+  t=(t||'').trim(); if(!t){toast('输入点什么再发');return}
+  mine.push(t);document.getElementById('box').value='';
+  tab=0;render();toast('已送进终端');
+  document.getElementById('screen').scrollTop=99999;
+}
+render();
 </script>
-</body></html>
+</body>
+</html>
